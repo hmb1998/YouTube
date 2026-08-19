@@ -52,14 +52,15 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// سێرڤەرێکی بچووک بۆ ئەوەی Fly.io پۆرتەکە ببینێت و بۆتەکە ڕیستارت نەکاتەوە
+// سێرڤەری وێب بۆ وەڵامدانەوەی پێداویستییەکانی پلاتفۆرمی Fly.io
 const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot is running!');
+    res.end('OK');
 });
 
-server.listen(8080, () => {
-    console.log('HTTP Server is listening on port 8080');
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+    console.log(`HTTP Server is listening on port ${PORT}`);
 });
 
 client.login(process.env.TOKEN);
