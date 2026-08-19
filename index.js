@@ -39,7 +39,8 @@ client.on('messageCreate', async (message) => {
         const player = createAudioPlayer();
         connection.subscribe(player);
 
-        let streamData = await play.stream(url);
+        // پشکنین و هێنانی زانیاری گۆرانی بە شێوازێکی پارێزراو
+        let streamData = await play.stream(url, { discordPlayerCompatibility: true });
         const resource = createAudioResource(streamData.stream, {
             inputType: streamData.type
         });
@@ -48,11 +49,11 @@ client.on('messageCreate', async (message) => {
         await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لێدەدرێت!`);
     } catch (error) {
         console.error("LOG ERROR:", error);
-        await replyMsg.edit('❌ کێشەیەک ڕوویدا، دڵنیا ببەوە لەوەی لینکەکە ڕاستە.');
+        await replyMsg.edit('❌ کێشەیەک ڕوویدا، یوتیوب داوای پشکنینی بۆت دەکات یان لینکەکە هەڵەیە.');
     }
 });
 
-// سێرڤەری وێب بۆ پۆرت 8080 تا Fly.io ڕیستارتی نەکاتەوە
+// سێرڤەری وێب بۆ پۆرت 8080 تا Fly.io هەمیشە بە زیندویی بهێڵێتەوە
 const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
