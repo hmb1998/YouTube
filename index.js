@@ -1,51 +1,73 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits } = require("discord.js");
-const { DisTube } = require("distube");
-const { SpotifyPlugin } = require("@distube/spotify");
-const { YtDlpPlugin } = require("@distube/yt-dlp");
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require("@discordjs/voice");
+const https = require('https');
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+
+client.once("ready", async () => {
+  const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+  const command = new SlashCommandBuilder()
+    .setName("play")
+    .setDescription("Play music from YouTube")
+    .addStringOption(opt => opt.setName("url").setDescription("YouTube URL").setRequired(true));
+
+  for (const guild of client.guilds.cache.values()) {
+    await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [command.toJSON()] });
+  }
+  console.log("✅ Bot is ready!");
 });
 
-const distube = new DisTube(client, {
-  leaveOnStop: true,
-  emitNewSongOnly: true,
-  plugins: [new SpotifyPlugin(), new YtDlpPlugin()],
-});
-
-client.once("ready", () => {
-  console.log("✅ Bot is online and ready to play music!");
-});
-
-client.on("messageCreate", async (message) => {
-  if (message.author.bot || !message.content.startsWith("!")) return;
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand() || interaction.commandName !== "play") return;
   
-  const args = message.content.slice(1).trim().split(/ +/);
-  const command = args.shift().toLowerCase();
+  const channel = interaction.member?.voice?.channel;
+  if (!channel) return interaction.reply({ content: "❌ تکایە سەرەتا بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
 
-  if (command === "play") {
-    const voiceChannel = message.member.voice.channel;
-    if (!voiceChannel) return message.reply("❌ تکایە بچۆ ناو ڤۆیس چەنڵ.");
-    
-    const song = args.join(" ");
-    if (!song) return message.reply("❌ تکایە ناوی گۆرانی یان لینکی یوتیوب بنووسە.");
-    
-    distube.play(voiceChannel, song, {
-      member: message.member,
-      textChannel: message.channel,
-      message,
+  const url = interaction.options.getString("url");
+  await interaction.deferReply();
+
+  try {
+    https.get(`https://api.cobalt.tools/api/json?url=${encodeURIComponent(url)}`, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', async () => {
+        try {
+          const json = JSON.parse(data);
+          const audioUrl = json.url || json.picker?.[0]?.url;
+          
+          if (!audioUrl) return interaction.editReply("❌ نەتوانرا دەنگی ئەم لینکە وەربگیرێت.");
+
+          const connection = joinVoiceChannel({ 
+            channelId: channel.id, 
+            guildId: channel.guild.id, 
+            adapterCreator: channel.guild.voiceAdapterCreator,
+            selfDeaf: true 
+          });
+
+          const player = createAudioPlayer();
+          const resource = createAudioResource(audioUrl);
+          
+          player.play(resource);
+          connection.subscribe(player);
+
+          player.once(AudioPlayerStatus.Idle, () => {
+            try { connection.destroy(); } catch {}
+          });
+
+          await interaction.editReply("🎵 گۆرانییەکە دەستی پێکرد!");
+        } catch (err) {
+          await interaction.editReply("❌ هەڵە لە شیکردنەوەی داتاکە.");
+        }
+      });
+    }).on('error', async () => {
+      await interaction.editReply("❌ کێشەی ئینتەرنێت هەیە.");
     });
+  } catch (e) {
+    await interaction.editReply("❌ هەڵەیەک ڕوویدا.");
   }
 });
-
-distube.on("playSong", (queue, song) =>
-  queue.textChannel.send(`🎵 ئێستا ئەم گۆرانییە لێدەدرێت: ${song.name}`)
-);
 
 client.login(process.env.TOKEN);
