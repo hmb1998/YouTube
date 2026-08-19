@@ -5,15 +5,11 @@
   "scripts": {
     "start": "node index.js"
   },
-  "engines": {
-    "node": ">=22.12.0"
-  },
   "dependencies": {
-    "discord.js": "14.27.0",
-    "@discordjs/voice": "^0.19.2",
-    "opusscript": "*",
-    "ffmpeg-static": "^5.2.0",
-    "dotenv": "^16.6.1",
-    "play-dl": "^1.9.7"
+    "@distube/ytdl-core": "^4.16.4",
+    "@discordjs/voice": "^0.16.1",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5",
+    "opusscript": "0.0.8"
   }
 }
