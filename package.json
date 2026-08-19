@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.16.1",
-    "@distube/ytdl-core": "latest",
-    "discord.js": "^14.14.1"
+    "discord.js": "^14.14.1",
+    "play-dl": "^1.9.7"
   }
 }
