@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const ytdl = require('@distube/ytdl-core');
+const play = require('play-dl');
 const { joinVoiceChannel, createAudioResource, createAudioPlayer } = require('@discordjs/voice');
 const http = require('http');
 
@@ -39,8 +39,10 @@ client.on('messageCreate', async (message) => {
         const player = createAudioPlayer();
         connection.subscribe(player);
 
-        const stream = ytdl(url, { filter: 'audioonly', highWaterMark: 1 << 25 });
-        const resource = createAudioResource(stream);
+        let streamData = await play.stream(url);
+        const resource = createAudioResource(streamData.stream, {
+            inputType: streamData.type
+        });
         
         player.play(resource);
         await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لێدەدرێت!`);
