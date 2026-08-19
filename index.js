@@ -44,7 +44,16 @@ client.on("messageCreate", async (message) => {
       selfMute: false
     });
 
-    const stream = ytdl(url, { quality: 'highestaudio', agent: undefined });
+    const stream = ytdl(url, { 
+      quality: 'highestaudio', 
+      agent: undefined,
+      requestOptions: {
+        headers: {
+          cookie: process.env.COOKIE
+        }
+      }
+    });
+
     const resource = createAudioResource(stream);
     const player = createAudioPlayer();
     
