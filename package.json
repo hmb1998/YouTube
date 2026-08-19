@@ -1,6 +1,6 @@
 {
   "name": "youtube-discord-bot",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -10,10 +10,9 @@
   },
   "dependencies": {
     "discord.js": "14.27.0",
-    "discord-player": "7.2.0",
-    "@discord-player/extractor": "7.2.0",
+    "@discordjs/voice": "^0.19.2",
     "ffmpeg-static": "^5.2.0",
-    "mediaplex": "^1.0.0",
-    "dotenv": "^16.6.1"
+    "dotenv": "^16.6.1",
+    "youtubei.js": "17.2.0"
   }
 }

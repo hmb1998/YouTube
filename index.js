@@ -6,11 +6,23 @@ const {
   SlashCommandBuilder,
   EmbedBuilder,
   REST,
-  Routes
+  Routes,
+  PermissionsBitField
 } = require("discord.js");
 
-const { Player } = require("discord-player");
-const { DefaultExtractors } = require("@discord-player/extractor");
+const {
+  joinVoiceChannel,
+  createAudioPlayer,
+  createAudioResource,
+  AudioPlayerStatus,
+  NoSubscriberBehavior,
+  StreamType,
+  VoiceConnectionStatus,
+  entersState
+} = require("@discordjs/voice");
+
+const { spawn } = require("child_process");
+const path = require("path");
 
 const TOKEN = process.env.TOKEN;
 
@@ -26,7 +38,166 @@ const client = new Client({
   ]
 });
 
-const player = new Player(client);
+// YouTube.js is ESM, so we load it dynamically from this CommonJS file.
+let youtube;
+const guildPlayers = new Map();
+
+function getYouTubeVideoId(input) {
+  try {
+    const url = new URL(input);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+
+    if (host === "youtu.be") {
+      return url.pathname.slice(1).split("/")[0] || null;
+    }
+
+    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+      if (url.pathname === "/watch") return url.searchParams.get("v");
+      if (url.pathname.startsWith("/shorts/")) return url.pathname.split("/")[2] || null;
+      if (url.pathname.startsWith("/live/")) return url.pathname.split("/")[2] || null;
+    }
+  } catch {}
+
+  return null;
+}
+
+function isYouTubeUrl(input) {
+  try {
+    const url = new URL(input);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    return host === "youtube.com" || host === "youtu.be" || host.endsWith(".youtube.com");
+  } catch {
+    return false;
+  }
+}
+
+async function getAudioStream(videoId) {
+  const info = await youtube.getBasicInfo(videoId);
+  const status = info.playability_status?.status;
+
+  if (status && status !== "OK") {
+    throw new Error(`YouTube playability status: ${status}`);
+  }
+
+  const format = info.chooseFormat({ type: "audio", quality: "best" });
+  if (!format) throw new Error("No playable YouTube audio format found.");
+
+  const streamUrl = format.decipher(youtube.session.player);
+  if (!streamUrl) throw new Error("Could not create YouTube stream URL.");
+
+  return {
+    title: info.basic_info?.title || "YouTube",
+    author: info.basic_info?.author || "",
+    thumbnail: info.basic_info?.thumbnail?.[0]?.url || null,
+    streamUrl
+  };
+}
+
+function stopGuild(guildId) {
+  const current = guildPlayers.get(guildId);
+  if (!current) return;
+
+  try { current.player.stop(); } catch {}
+  try { current.ffmpeg?.kill("SIGKILL"); } catch {}
+  try { current.connection.destroy(); } catch {}
+  guildPlayers.delete(guildId);
+}
+
+async function playYouTube(interaction, voiceChannel, link, videoId) {
+  const guildId = interaction.guild.id;
+
+  const me = interaction.guild.members.me;
+  const perms = voiceChannel.permissionsFor(me);
+
+  if (!perms?.has(PermissionsBitField.Flags.ViewChannel)) {
+    throw new Error("BOT_NO_VIEW_CHANNEL");
+  }
+  if (!perms?.has(PermissionsBitField.Flags.Connect)) {
+    throw new Error("BOT_NO_CONNECT");
+  }
+  if (!perms?.has(PermissionsBitField.Flags.Speak)) {
+    throw new Error("BOT_NO_SPEAK");
+  }
+
+  if (me?.voice?.channelId && me.voice.channelId !== voiceChannel.id) {
+    throw new Error("BOT_IN_OTHER_VOICE");
+  }
+
+  stopGuild(guildId);
+
+  const data = await getAudioStream(videoId);
+
+  const connection = joinVoiceChannel({
+    channelId: voiceChannel.id,
+    guildId: guildId,
+    adapterCreator: interaction.guild.voiceAdapterCreator,
+    selfDeaf: true
+  });
+
+  await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+
+  const player = createAudioPlayer({
+    behaviors: { noSubscriber: NoSubscriberBehavior.Play }
+  });
+
+  // FFmpeg converts YouTube's audio stream to raw PCM for Discord voice.
+  const ffmpegPath = require("ffmpeg-static");
+  const ffmpeg = spawn(ffmpegPath, [
+    "-hide_banner",
+    "-loglevel", "error",
+    "-reconnect", "1",
+    "-reconnect_streamed", "1",
+    "-reconnect_delay_max", "5",
+    "-i", data.streamUrl,
+    "-vn",
+    "-f", "s16le",
+    "-ar", "48000",
+    "-ac", "2",
+    "pipe:1"
+  ], { stdio: ["ignore", "pipe", "pipe"] });
+
+  const resource = createAudioResource(ffmpeg.stdout, {
+    inputType: StreamType.Raw,
+    inlineVolume: false
+  });
+
+  player.play(resource);
+  connection.subscribe(player);
+
+  const state = { player, connection, ffmpeg };
+  guildPlayers.set(guildId, state);
+
+  ffmpeg.stderr.on("data", data => {
+    const text = data.toString().trim();
+    if (text) console.error("FFmpeg:", text);
+  });
+
+  ffmpeg.on("error", error => {
+    console.error("❌ FFmpeg error:", error);
+  });
+
+  ffmpeg.on("close", code => {
+    if (code !== 0) console.error(`❌ FFmpeg exited with code ${code}`);
+  });
+
+  player.once(AudioPlayerStatus.Idle, () => {
+    if (guildPlayers.get(guildId)?.player === player) {
+      try { connection.destroy(); } catch {}
+      guildPlayers.delete(guildId);
+    }
+  });
+
+  player.on("error", error => {
+    console.error("❌ Discord audio player error:", error);
+    if (guildPlayers.get(guildId)?.player === player) {
+      try { ffmpeg.kill("SIGKILL"); } catch {}
+      try { connection.destroy(); } catch {}
+      guildPlayers.delete(guildId);
+    }
+  });
+
+  return data;
+}
 
 const youtubeCommand = new SlashCommandBuilder()
   .setName("youtube")
@@ -42,10 +213,12 @@ client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
   try {
-    await player.extractors.loadMulti(DefaultExtractors);
-    console.log("✅ Extractors loaded");
+    const mod = await import("youtubei.js");
+    youtube = await mod.Innertube.create({ generate_session_locally: true });
+    console.log("✅ YouTube engine loaded");
   } catch (error) {
-    console.error("❌ Extractor loading error:", error);
+    console.error("❌ YouTube engine loading error:", error);
+    process.exit(1);
   }
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
@@ -73,27 +246,11 @@ client.on("interactionCreate", async interaction => {
   if (interaction.commandName !== "youtube") return;
 
   const link = interaction.options.getString("link", true).trim();
+  const videoId = getYouTubeVideoId(link);
 
-  let url;
-  try {
-    url = new URL(link);
-  } catch {
+  if (!isYouTubeUrl(link) || !videoId) {
     return interaction.reply({
-      content: "❌ تکایە لینکی دروستی YouTube بنێرە.",
-      ephemeral: true
-    });
-  }
-
-  const host = url.hostname.toLowerCase().replace(/^www\./, "");
-  const isYouTube =
-    host === "youtube.com" ||
-    host === "youtu.be" ||
-    host === "music.youtube.com" ||
-    host.endsWith(".youtube.com");
-
-  if (!isYouTube) {
-    return interaction.reply({
-      content: "❌ تەنها لینکی YouTube قبوڵە.",
+      content: "❌ تکایە لینکی دروستی YouTube بنێرە، وەک: https://www.youtube.com/watch?v=...",
       ephemeral: true
     });
   }
@@ -110,43 +267,38 @@ client.on("interactionCreate", async interaction => {
   await interaction.deferReply();
 
   try {
-    const result = await player.play(voiceChannel, link, {
-      nodeOptions: {
-        metadata: { channel: interaction.channel },
-        leaveOnEnd: true,
-        leaveOnEmpty: true,
-        leaveOnEmptyCooldown: 30000,
-        leaveOnStop: true
-      }
-    });
-
-    const track = result.track;
+    const data = await playYouTube(interaction, voiceChannel, link, videoId);
 
     const embed = new EmbedBuilder()
       .setTitle("🎵 ئێستا دەخوێنرێت")
-      .setDescription(`**${track.title}**`)
+      .setDescription(`**${data.title}**`)
       .addFields({ name: "🔗 لینک", value: `[YouTube](${link})` })
       .setTimestamp();
 
-    if (track.thumbnail) embed.setThumbnail(track.thumbnail);
-
+    if (data.thumbnail) embed.setThumbnail(data.thumbnail);
     await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error("❌ Playback error:", error);
-    await interaction.editReply({
-      content:
-        "❌ نەتوانرا گۆرانییەکە پەخش بکرێت.\n" +
-        "دڵنیابە لینکەکەی YouTube دروستە و بۆتەکە Permission ـی Connect و Speak ـی هەیە."
-    });
+
+    let message = "❌ نەتوانرا گۆرانییەکە پەخش بکرێت.";
+    if (error.message === "BOT_NO_VIEW_CHANNEL") message = "❌ بۆتەکە Permission ـی View Channel نییە.";
+    else if (error.message === "BOT_NO_CONNECT") message = "❌ بۆتەکە Permission ـی Connect نییە لە Voice Channel ـەکە.";
+    else if (error.message === "BOT_NO_SPEAK") message = "❌ بۆتەکە Permission ـی Speak نییە لە Voice Channel ـەکە.";
+    else if (error.message === "BOT_IN_OTHER_VOICE") message = "❌ بۆتەکە لە Voice Channel ـێکی ترە.";
+    else if (/LOGIN_REQUIRED|AGE_RESTRICTED|UNPLAYABLE/i.test(error.message)) message = "❌ ئەم ڤیدیۆیە لەلایەن YouTube ـەوە بۆ playback بەردەست نییە. ڤیدیۆیەکی تری تاقی بکەرەوە.";
+
+    await interaction.editReply({ content: message });
   }
 });
 
-player.events.on("playerError", (queue, error) => {
-  console.error("❌ Player error:", error);
+process.on("SIGINT", () => {
+  for (const guildId of guildPlayers.keys()) stopGuild(guildId);
+  process.exit(0);
 });
 
-player.events.on("error", (queue, error) => {
-  console.error("❌ Queue error:", error);
+process.on("SIGTERM", () => {
+  for (const guildId of guildPlayers.keys()) stopGuild(guildId);
+  process.exit(0);
 });
 
 client.login(TOKEN);

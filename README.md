@@ -1,40 +1,23 @@
 # YouTube Discord Bot
 
-تەنها یەک Slash Command هەیە:
+ئەمە هەمان بۆتەکەیە، بە `/youtube` بۆ پەخشکردنی لینکی YouTube لە Voice Channel.
 
-`/youtube link: https://www.youtube.com/watch?v=...`
-
-## چی دەکات؟
-- بەکارهێنەر دەبێت لە Voice Channel بێت.
-- لینکەکەی YouTube وەردەگرێت.
-- بۆتەکە دەچێتە ناو هەمان Voice Channel.
-- گۆرانییەکە پەخش دەکات.
-- کاتێک گۆرانییەکە کۆتایی هات، بۆتەکە دەتوانێت Voice Channel بەجێبهێڵێت.
+## بەکارهێنان
+1. بچۆ ناو Voice Channel.
+2. `/youtube` بنووسە.
+3. لە `link` ـدا هەر لینکی YouTube بنێرە.
 
 ## Railway
-لە Railway > Variables ئەمە زیاد بکە:
+لە Railway > Variables:
 
-TOKEN = Discord Bot Token
+`TOKEN = Discord Bot Token`
 
-پاشان Deploy بکە.
-
-## Discord Permissions
-بۆتەکە لە Voice Channel پێویستی بەمانە هەیە:
+لە Discord، بۆتەکە لە Voice Channel پێویستی بە:
 - View Channel
 - Connect
 - Speak
 
-## Discord Developer Portal
-لە Bot > Privileged Gateway Intents پێویستە:
-- Server Members Intent: ON
-- Message Content Intent: ON
-- Presence Intent: پێویست نییە بۆ ئەم بۆتە.
+هەیە.
 
-## بەکارهێنان
-1. بچۆ Voice Channel.
-2. بنووسە:
-   `/youtube`
-3. لە `link` لینکی هەر گۆرانییەکی YouTube دابنێ.
-4. Send بکە.
-
-تێبینی: YouTube هەندێک جار ڕێگە بە stream ـکردنی هەموو ڤیدیۆکان نادات؛ ئەگەر ڤیدیۆیەکی تایبەت/بەردەست نەبێت، بۆتەکە هەڵەی playback دەدات.
+## تێبینی
+YouTube هەندێک ڤیدیۆ بۆ playback بەردەست ناکات (وەک هەندێک ڤیدیۆی age-restricted/private). ئەو جۆرە ڤیدیۆیە پەخش نابێت.
