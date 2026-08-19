@@ -22,37 +22,13 @@ const {
   entersState
 } = require("@discordjs/voice");
 
-const ytdl = require("@distube/ytdl-core");
+const playdl = require("play-dl");
 
 const TOKEN = process.env.TOKEN;
-const YOUTUBE_COOKIE = process.env.YOUTUBE_COOKIE;
 
 if (!TOKEN) {
   console.error("❌ TOKEN is missing in Railway Variables.");
   process.exit(1);
-}
-
-let agent = undefined;
-if (YOUTUBE_COOKIE) {
-  try {
-    let cookiesArray;
-    if (YOUTUBE_COOKIE.trim().startsWith("[")) {
-      cookiesArray = JSON.parse(YOUTUBE_COOKIE);
-    } else {
-      cookiesArray = [{
-        domain: ".youtube.com",
-        path: "/",
-        secure: true,
-        httpOnly: true,
-        name: "__Secure-1PSID",
-        value: YOUTUBE_COOKIE.trim()
-      }];
-    }
-    agent = ytdl.createAgent(cookiesArray);
-    console.log("🍪 Cookie agent created successfully!");
-  } catch (err) {
-    console.error("⚠️ Failed to create agent with cookie:", err.message);
-  }
 }
 
 const client = new Client({
@@ -73,7 +49,7 @@ function stopGuild(guildId) {
   guildPlayers.delete(guildId);
 }
 
-async function playYouTube(interaction, voiceChannel, link) {
+async function playSoundCloud(interaction, voiceChannel, link) {
   const guildId = interaction.guild.id;
 
   const me = interaction.guild.members.me;
@@ -89,15 +65,9 @@ async function playYouTube(interaction, voiceChannel, link) {
 
   stopGuild(guildId);
 
-  const songInfo = await ytdl.getInfo(link, agent ? { agent } : {});
-  const videoDetails = songInfo.videoDetails;
-
-  // گۆڕینی فیلتر بۆ ئەوەی هەڵەی highestaudio نەیەت
-  const stream = ytdl(link, {
-    agent: agent,
-    filter: format => format.audioBitrate,
-    highWaterMark: 1 << 25
-  });
+  // پشکنین و وەرگرتنی ستریمی ساوندکلۆد
+  const scData = await playdl.soundcloud(link);
+  const stream = await playdl.stream_soundcloud(link);
 
   const connection = joinVoiceChannel({
     channelId: voiceChannel.id,
@@ -112,8 +82,8 @@ async function playYouTube(interaction, voiceChannel, link) {
     behaviors: { noSubscriber: NoSubscriberBehavior.Play }
   });
 
-  const resource = createAudioResource(stream, {
-    inputType: StreamType.Arbitrary,
+  const resource = createAudioResource(stream.stream, {
+    inputType: stream.type,
     inlineVolume: false
   });
 
@@ -139,18 +109,18 @@ async function playYouTube(interaction, voiceChannel, link) {
   });
 
   return {
-    title: videoDetails.title || "YouTube",
-    thumbnail: videoDetails.thumbnails?.[0]?.url || null
+    title: scData.name || "SoundCloud Track",
+    thumbnail: scData.thumbnail || null
   };
 }
 
-const youtubeCommand = new SlashCommandBuilder()
-  .setName("youtube")
-  .setDescription("Play a YouTube song in your voice channel")
+const soundcloudCommand = new SlashCommandBuilder()
+  .setName("play")
+  .setDescription("Play a SoundCloud song in your voice channel")
   .addStringOption(option =>
     option
       .setName("link")
-      .setDescription("YouTube song/video link")
+      .setDescription("SoundCloud track link")
       .setRequired(true)
   );
 
@@ -158,7 +128,7 @@ client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
-  const command = youtubeCommand.toJSON();
+  const command = soundcloudCommand.toJSON();
 
   for (const guild of client.guilds.cache.values()) {
     try {
@@ -167,22 +137,22 @@ client.once("ready", async () => {
         { body: [command] }
       );
     } catch (error) {
-      console.error(`❌ Failed to register /youtube in ${guild.name}:`, error);
+      console.error(`❌ Failed to register /play in ${guild.name}:`, error);
     }
   }
 
-  console.log("🎵 YouTube music bot is ready with Distube ytdl-core!");
+  console.log("🎵 SoundCloud music bot is ready!");
 });
 
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
-  if (interaction.commandName !== "youtube") return;
+  if (interaction.commandName !== "play") return;
 
   const link = interaction.options.getString("link", true).trim();
 
-  if (!ytdl.validateURL(link)) {
+  if (!link.includes("soundcloud.com")) {
     return interaction.reply({
-      content: "❌ تکایە لینکی دروستی YouTube بنێرە.",
+      content: "❌ تکایە لینکی دروستی SoundCloud بنێرە.",
       ephemeral: true
     });
   }
@@ -191,7 +161,7 @@ client.on("interactionCreate", async interaction => {
 
   if (!voiceChannel) {
     return interaction.reply({
-      content: "❌ سەرەتا بچۆ ناو Voice Channel، پاشان /youtube بەکاربهێنە.",
+      content: "❌ سەرەتا بچۆ ناو Voice Channel، پاشان /play بەکاربهێنە.",
       ephemeral: true
     });
   }
@@ -199,19 +169,19 @@ client.on("interactionCreate", async interaction => {
   await interaction.deferReply();
 
   try {
-    const data = await playYouTube(interaction, voiceChannel, link);
+    const data = await playSoundCloud(interaction, voiceChannel, link);
 
     const embed = new EmbedBuilder()
-      .setTitle("🎵 ئێستا دەخوێنرێت")
+      .setTitle("🎵 ئێستا دەخوێنرێت (SoundCloud)")
       .setDescription(`**${data.title}**`)
-      .addFields({ name: "🔗 لینک", value: `[YouTube](${link})` })
+      .addFields({ name: "🔗 لینک", value: `[SoundCloud](${link})` })
       .setTimestamp();
 
     if (data.thumbnail) embed.setThumbnail(data.thumbnail);
     await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error("❌ Playback error:", error);
-    await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا لە پەخشکردنی گۆرانییەکە (یوتیوب داتای ڤیدیۆیەکەی گۆڕیوە)." });
+    await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا لە پەخشکردنی گۆرانییەکە." });
   }
 });
 
