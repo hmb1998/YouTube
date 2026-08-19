@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const play = require('play-dl');
 const { joinVoiceChannel, createAudioResource, createAudioPlayer } = require('@discordjs/voice');
+const http = require('http');
 
 const client = new Client({ 
     intents: [
@@ -38,7 +39,6 @@ client.on('messageCreate', async (message) => {
         const player = createAudioPlayer();
         connection.subscribe(player);
 
-        // بەکارهێنانی play-dl بۆ وەرگرتنی ستریمی دەنگ بێ کێشەی کووکی
         let streamData = await play.stream(url);
         const resource = createAudioResource(streamData.stream, {
             inputType: streamData.type
@@ -50,6 +50,16 @@ client.on('messageCreate', async (message) => {
         console.error("LOG ERROR:", error);
         await replyMsg.edit('❌ کێشەیەک ڕوویدا، دڵنیا ببەوە لەوەی لینکەکە ڕاستە.');
     }
+});
+
+// سێرڤەرێکی بچووک بۆ ئەوەی Fly.io پۆرتەکە ببینێت و بۆتەکە ڕیستارت نەکاتەوە
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is running!');
+});
+
+server.listen(8080, () => {
+    console.log('HTTP Server is listening on port 8080');
 });
 
 client.login(process.env.TOKEN);
