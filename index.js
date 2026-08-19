@@ -32,26 +32,29 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-// ڕێکخستنی کووکی بۆ ytdl-core
+// ڕێکخستنی دروستی کووکی بۆ ytdl-core بە شێوازی Array
 let agent = undefined;
 if (YOUTUBE_COOKIE) {
   try {
-    // دروستکردنی ئەکاونتی ئەگەینت بە کووکی
-    agent = ytdl.createAgent(JSON.stringify([{
-      domain: ".youtube.com",
-      expirationDate: 1821419422,
-      hostOnly: false,
-      httpOnly: true,
-      name: "__Secure-1PSID",
-      path: "/",
-      sameSite: "unspecified",
-      secure: true,
-      session: false,
-      value: YOUTUBE_COOKIE.trim()
-    }]));
-    console.log("🍪 Agent with Cookie created successfully for ytdl-core!");
+    let cookiesArray;
+    // ئەگەر کووکییەکە جیسۆن بوو یان دەقی ئاسایی بوو
+    if (YOUTUBE_COOKIE.trim().startsWith("[")) {
+      cookiesArray = JSON.parse(YOUTUBE_COOKIE);
+    } else {
+      // دروستکردنی ئەری بە کووکییەکەی تۆ
+      cookiesArray = [{
+        domain: ".youtube.com",
+        path: "/",
+        secure: true,
+        httpOnly: true,
+        name: "__Secure-1PSID",
+        value: YOUTUBE_COOKIE.trim()
+      }];
+    }
+    agent = ytdl.createAgent(cookiesArray);
+    console.log("🍪 Cookie agent created successfully!");
   } catch (err) {
-    console.error("⚠️ Failed to create agent with cookie:", err);
+    console.error("⚠️ Failed to create agent with cookie:", err.message);
   }
 }
 
@@ -89,7 +92,6 @@ async function playYouTube(interaction, voiceChannel, link) {
 
   stopGuild(guildId);
 
-  // وەرگرتنی زانیاری ڤیدیۆ
   const songInfo = await ytdl.getInfo(link, agent ? { agent } : {});
   const videoDetails = songInfo.videoDetails;
 
