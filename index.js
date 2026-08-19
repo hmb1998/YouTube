@@ -32,16 +32,13 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-// ڕێکخستنی دروستی کووکی بۆ ytdl-core بە شێوازی Array
 let agent = undefined;
 if (YOUTUBE_COOKIE) {
   try {
     let cookiesArray;
-    // ئەگەر کووکییەکە جیسۆن بوو یان دەقی ئاسایی بوو
     if (YOUTUBE_COOKIE.trim().startsWith("[")) {
       cookiesArray = JSON.parse(YOUTUBE_COOKIE);
     } else {
-      // دروستکردنی ئەری بە کووکییەکەی تۆ
       cookiesArray = [{
         domain: ".youtube.com",
         path: "/",
@@ -95,10 +92,10 @@ async function playYouTube(interaction, voiceChannel, link) {
   const songInfo = await ytdl.getInfo(link, agent ? { agent } : {});
   const videoDetails = songInfo.videoDetails;
 
+  // گۆڕینی فیلتر بۆ ئەوەی هەڵەی highestaudio نەیەت
   const stream = ytdl(link, {
     agent: agent,
-    filter: "audioonly",
-    quality: "highestaudio",
+    filter: format => format.audioBitrate,
     highWaterMark: 1 << 25
   });
 
@@ -214,7 +211,7 @@ client.on("interactionCreate", async interaction => {
     await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error("❌ Playback error:", error);
-    await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا لە پەخشکردنی گۆرانییەکە." });
+    await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا لە پەخشکردنی گۆرانییەکە (یوتیوب داتای ڤیدیۆیەکەی گۆڕیوە)." });
   }
 });
 
