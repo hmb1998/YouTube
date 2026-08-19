@@ -1,6 +1,18 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const ytdl = require('@distube/ytdl-core');
 const { joinVoiceChannel, createAudioResource, createAudioPlayer } = require('@discordjs/voice');
+const http = require('http');
+
+// دروستکردنی سێرڤەرێکی بچووک بۆ ئەوەی Fly.io ڕیستارتت نەکاتەوە
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is running!\n');
+});
+
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+    console.log(`🌐 HTTP Server is listening on port ${PORT}`);
+});
 
 const client = new Client({ 
     intents: [
