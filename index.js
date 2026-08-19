@@ -13,7 +13,7 @@ const client = new Client({
 });
 
 client.once('ready', () => {
-    console.log('✅ Bot is ready and running with yt-dlp!');
+    console.log('✅ Bot is ready and running with yt-dlp & cookies!');
 });
 
 client.on('messageCreate', async (message) => {
@@ -39,8 +39,9 @@ client.on('messageCreate', async (message) => {
         const player = createAudioPlayer();
         connection.subscribe(player);
 
-        // بەکارهێنانی yt-dlp بۆ وەرگرتنی دەنگەکە بە ڕاستەوخۆیی
+        // لێرەدا فایلەکە کووکییەکەت بەکاردەهێنێت
         const ytProcess = spawn('yt-dlp', [
+            '--cookies', 'cookies.txt',
             '-x',
             '--audio-format', 'opus',
             '-o', '-',
@@ -64,7 +65,6 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// سێرڤەری وێب بۆ پۆرت 8080 تا Fly.io بۆتەکەت نەوەستێنێت
 const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
