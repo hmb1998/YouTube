@@ -19,25 +19,35 @@ client.once("ready", () => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot || !message.content.startsWith("!play")) return;
 
-  // هەوڵ دەدات ڤۆیس چەنڵی ئەو کەسە بدۆزێتەوە کە فەرمانەکەی لێداوە
   let channel = message.member?.voice?.channel;
-
-  // ئەگەر خۆت لە ڤۆیس نەبوویت، دەچێتە یەکەم ڤۆیس چەنڵی بەردەست لە سێرڤەرەکەدا بە زۆر!
   if (!channel) {
-    channel = message.guild.channels.cache.find(ch => ch.type === 2); // 2 = GuildVoice
+    channel = message.guild.channels.cache.find(ch => ch.type === 2);
   }
 
-  if (!channel) return message.reply("❌ هیچ ڤۆیس چەنڵێک لەم سێرڤەرەدا نییە تا بۆتەکە بچێتە ناوი.");
+  if (!channel) return message.reply("❌ هیچ ڤۆیس چەنڵێک نەدۆزرایەوە.");
 
+  // دۆزینەوە و پاککردنەوەی لینکی یوتیوب
   const urlMatch = message.content.match(/https?:\/\/[^\s]+/);
-  const url = urlMatch ? urlMatch[0] : null;
+  let rawUrl = urlMatch ? urlMatch[0] : null;
 
-  if (!url) return message.reply("❌ تکایە لینکی یوتیوب بنووسە دوای !play.");
+  if (!rawUrl) return message.reply("❌ تکایە لینکی یوتیوب بنووسە.");
 
-  const replyMsg = await message.reply("🎵 خەریکە دەچێتە ناو ڤۆیس و گۆرانییەکە لێدەدات...");
+  let url;
+  try {
+    // لابردنی پاشگری زیاتری لینک وەکو ?si=... بۆ ئەوەی هەڵە نەدات
+    const parsedObj = new URL(rawUrl);
+    if (parsedObj.hostname.includes("youtu.be")) {
+      url = `https://www.youtube.com/watch?v=${parsedObj.pathname.slice(1)}`;
+    } else {
+      url = `https://www.youtube.com/watch?v=${parsedObj.searchParams.get("v")}`;
+    }
+  } catch {
+    url = rawUrl; // ئەگەر هەر کێشەیەک هەبوو هەر خۆی بەکاردەهێنێت
+  }
+
+  const replyMsg = await message.reply("🎵 خەریکە گۆرانییەکە دەست پێدەکات...");
 
   try {
-    // پەیوەندیکردن بە ڤۆیس چەنڵەکە بە شێوەیەکی فەرمی و بەهێز
     const connection = joinVoiceChannel({ 
       channelId: channel.id, 
       guildId: channel.guild.id, 
@@ -57,10 +67,10 @@ client.on("messageCreate", async (message) => {
       try { connection.destroy(); } catch {}
     });
 
-    await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لە ڤۆیسی (**${channel.name}**) دەستی پێکرد!`);
+    await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لە ڤۆیسی (**${channel.name}**) لێدەدرێت!`);
   } catch (err) {
     console.error("LOG ERROR:", err);
-    await replyMsg.edit(`❌ هەڵەیەک ڕوویدا: ${err.message || "نەتوانرا لێبدرێت"}`);
+    await replyMsg.edit(`❌ هەڵە لە لێدانی گۆرانی: ${err.message || "نەتوانرا ڤیدیۆیەکی پاک بدۆزرێتەوە"}`);
   }
 });
 
