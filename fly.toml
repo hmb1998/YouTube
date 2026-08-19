@@ -3,3 +3,6 @@ primary_region = "iad"
 
 [build]
   dockerfile = "Dockerfile"
+
+[processes]
+  app = "npm start"
