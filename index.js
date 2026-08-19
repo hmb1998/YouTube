@@ -39,4 +39,4 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-client.login('YOUR_DISCORD_BOT_TOKEN'); // تۆکنەکەی دیسکۆردەکەت لێرە دابنێ
+client.login(process.env.TOKEN);
