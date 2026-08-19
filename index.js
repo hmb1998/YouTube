@@ -46,8 +46,8 @@ async function playLocalMusic(interaction, voiceChannel) {
     try { current.player.stop(); current.connection.destroy(); } catch {}
   }
 
-  // دیاریکردنی ڕێڕەوی فایلی دەنگیی ناوخۆیی
-  const filePath = path.join(__dirname, "music", "song.mp3");
+  // گەڕان بەدوای فایلەکە لە هەمان فۆڵدەری سەرەکیدا
+  const filePath = path.join(__dirname, "song.mp3");
 
   if (!fs.existsSync(filePath)) {
     throw new Error("LOCAL_FILE_NOT_FOUND");
@@ -116,7 +116,7 @@ client.on("interactionCreate", async interaction => {
   } catch (e) {
     console.error(e);
     if (e.message === "LOCAL_FILE_NOT_FOUND") {
-      await interaction.editReply({ content: "❌ فایلی `song.mp3` نەدۆزراوەتەوە لە فۆڵدەری `music`!" });
+      await interaction.editReply({ content: "❌ فایلی `song.mp3` نەدۆزراوەتەوە لە فۆڵدەری سەرەکی پڕۆژەکە!" });
     } else {
       await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا لە لێدانی فایلی دەنگییەکە." });
     }
