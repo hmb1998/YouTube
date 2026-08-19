@@ -1,6 +1,9 @@
 require("dotenv").config();
 require("opusscript");
 
+const fs = require("node:fs");
+const path = require("node:path");
+
 const {
   Client,
   GatewayIntentBits,
@@ -22,8 +25,6 @@ const {
   entersState
 } = require("@discordjs/voice");
 
-const playdl = require("play-dl");
-
 const TOKEN = process.env.TOKEN;
 
 if (!TOKEN) {
@@ -37,7 +38,7 @@ const client = new Client({
 
 const guildPlayers = new Map();
 
-async function playSound(interaction, voiceChannel, link) {
+async function playLocalMusic(interaction, voiceChannel) {
   const guildId = interaction.guild.id;
 
   if (guildPlayers.has(guildId)) {
@@ -45,8 +46,12 @@ async function playSound(interaction, voiceChannel, link) {
     try { current.player.stop(); current.connection.destroy(); } catch {}
   }
 
-  // وەرگرتنی ڕاستەوخۆی ستریم لە لینکەوە بەبێ گەڕان
-  const stream = await playdl.stream(link);
+  // دیاریکردنی ڕێڕەوی فایلی دەنگیی ناوخۆیی
+  const filePath = path.join(__dirname, "music", "song.mp3");
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error("LOCAL_FILE_NOT_FOUND");
+  }
 
   const connection = joinVoiceChannel({
     channelId: voiceChannel.id,
@@ -55,8 +60,12 @@ async function playSound(interaction, voiceChannel, link) {
     selfDeaf: true
   });
 
+  await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+
   const player = createAudioPlayer();
-  const resource = createAudioResource(stream.stream, { inputType: stream.type });
+  const resource = createAudioResource(filePath, {
+    inputType: StreamType.Arbitrary
+  });
 
   player.play(resource);
   connection.subscribe(player);
@@ -64,21 +73,26 @@ async function playSound(interaction, voiceChannel, link) {
   guildPlayers.set(guildId, { player, connection });
 
   player.once(AudioPlayerStatus.Idle, () => {
-    connection.destroy();
+    try { connection.destroy(); } catch {}
     guildPlayers.delete(guildId);
   });
 
-  return { title: link };
+  player.on("error", error => {
+    console.error("❌ Audio player error:", error);
+    try { connection.destroy(); } catch {}
+    guildPlayers.delete(guildId);
+  });
+
+  return { title: "song.mp3" };
 }
 
 client.once("ready", async () => {
-  console.log("✅ Bot is ready and stable!");
+  console.log("✅ Local Music Bot is ready and 100% stable!");
   
   const rest = new REST({ version: "10" }).setToken(TOKEN);
   const command = new SlashCommandBuilder()
     .setName("play")
-    .setDescription("Play from SoundCloud link")
-    .addStringOption(opt => opt.setName("link").setDescription("SoundCloud track link").setRequired(true));
+    .setDescription("Play local music file in voice channel");
 
   for (const guild of client.guilds.cache.values()) {
     await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [command.toJSON()] });
@@ -89,20 +103,23 @@ client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand() || interaction.commandName !== "play") return;
   
   const voiceChannel = interaction.member?.voice?.channel;
-  if (!voiceChannel) return interaction.reply({ content: "❌ سەرەتا بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
-
-  const link = interaction.options.getString("link", true).trim();
-  if (!link.includes("soundcloud.com")) {
-    return interaction.reply({ content: "❌ تکایە لینکی دروستی SoundCloud دابنە.", ephemeral: true });
+  if (!voiceChannel) {
+    return interaction.reply({ content: "❌ سەرەتا بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
   }
 
   await interaction.deferReply();
   try {
-    const song = await playSound(interaction, voiceChannel, link);
-    await interaction.editReply({ embeds: [new EmbedBuilder().setTitle("🎵 ئێستا لێدەدرێت").setDescription(`[SoundCloud Link](${song.title})`)] });
+    const song = await playLocalMusic(interaction, voiceChannel);
+    await interaction.editReply({ 
+      embeds: [new EmbedBuilder().setTitle("🎵 ئێستا لێدەدرێت (Local)").setDescription(`فایلی: **${song.title}**`)] 
+    });
   } catch (e) {
     console.error(e);
-    await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا لە وەرگرتنی گۆرانییەکە." });
+    if (e.message === "LOCAL_FILE_NOT_FOUND") {
+      await interaction.editReply({ content: "❌ فایلی `song.mp3` نەدۆزراوەتەوە لە فۆڵدەری `music`!" });
+    } else {
+      await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا لە لێدانی فایلی دەنگییەکە." });
+    }
   }
 });
 
