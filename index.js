@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const ytdl = require('@distube/ytdl-core');
+const play = require('play-dl');
 const { joinVoiceChannel, createAudioResource, createAudioPlayer } = require('@discordjs/voice');
 
 const client = new Client({ 
@@ -38,16 +38,11 @@ client.on('messageCreate', async (message) => {
         const player = createAudioPlayer();
         connection.subscribe(player);
 
-        const cookieData = process.env.COOKIE;
-        let agent = undefined;
-        if (cookieData) {
-            try {
-                agent = ytdl.createAgent(JSON.parse(cookieData));
-            } catch (e) {}
-        }
-
-        const stream = ytdl(url, { agent: agent, quality: 'highestaudio', filter: 'audioonly' });
-        const resource = createAudioResource(stream);
+        // بەکارهێنانی play-dl بۆ وەرگرتنی ستریمی دەنگ بێ کێشەی کووکی
+        let streamData = await play.stream(url);
+        const resource = createAudioResource(streamData.stream, {
+            inputType: streamData.type
+        });
         
         player.play(resource);
         await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لێدەدرێت!`);
