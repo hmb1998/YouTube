@@ -9,13 +9,13 @@ client.once("ready", async () => {
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
   const command = new SlashCommandBuilder()
     .setName("radio")
-    .setDescription("Play YouTube audio directly")
+    .setDescription("Play YouTube audio")
     .addStringOption(opt => opt.setName("url").setDescription("YouTube URL").setRequired(true));
 
   for (const guild of client.guilds.cache.values()) {
     await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [command.toJSON()] });
   }
-  console.log("✅ Ultimate Bot is ready!");
+  console.log("✅ Bot is ready!");
 });
 
 client.on("interactionCreate", async interaction => {
@@ -32,15 +32,16 @@ client.on("interactionCreate", async interaction => {
   await interaction.deferReply();
 
   try {
-    // وەرگرتنی لینکی ڕاستەوخۆی دەنگ بە ڕێگەی yt-dlp
     const output = await exec(url, {
-      getM4a: true,
+      print: '%(url)s',
       format: 'bestaudio',
-      print: '%(url)s'
+      noCheckCertificates: true,
+      noWarnings: true,
+      preferFreeFormats: true
     });
 
     const audioUrl = output.stdout.trim().split('\n').pop();
-    if (!audioUrl) throw new Error("Could not extract audio URL");
+    if (!audioUrl) throw new Error("Could not get audio URL");
 
     const connection = joinVoiceChannel({ 
       channelId: channel.id, 
@@ -62,7 +63,7 @@ client.on("interactionCreate", async interaction => {
     await interaction.editReply("🎵 ئێستا دەنگی لینکەکە دەستی پێکرد!");
   } catch (e) {
     console.error(e);
-    await interaction.editReply("❌ کێشە ڕوویدا. یوتیوب داواکارییەکەی قبووڵ نەکرد (لەبەر پاراستنی سێرვەرەکە).");
+    await interaction.editReply("❌ کێشە ڕوویدا لە وەرگرتنی دەنگەکە.");
   }
 });
 
