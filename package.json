@@ -6,10 +6,10 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@distube/ytdl-core": "^4.16.4",
     "@discordjs/voice": "^0.16.1",
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
-    "opusscript": "0.0.8"
+    "opusscript": "0.0.8",
+    "play-dl": "^1.9.7"
   }
 }
