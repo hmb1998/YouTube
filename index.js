@@ -4,7 +4,9 @@ const {
   Client,
   GatewayIntentBits,
   SlashCommandBuilder,
-  EmbedBuilder
+  EmbedBuilder,
+  REST,
+  Routes
 } = require("discord.js");
 
 const { Player } = require("discord-player");
@@ -13,7 +15,7 @@ const { DefaultExtractors } = require("@discord-player/extractor");
 const TOKEN = process.env.TOKEN;
 
 if (!TOKEN) {
-  console.error("❌ TOKEN is missing. Add TOKEN in Railway Variables.");
+  console.error("❌ TOKEN is missing in Railway Variables.");
   process.exit(1);
 }
 
@@ -28,7 +30,7 @@ const player = new Player(client);
 
 const youtubeCommand = new SlashCommandBuilder()
   .setName("youtube")
-  .setDescription("Play a YouTube song in your current voice channel")
+  .setDescription("Play a YouTube song in your voice channel")
   .addStringOption(option =>
     option
       .setName("link")
@@ -46,13 +48,20 @@ client.once("ready", async () => {
     console.error("❌ Extractor loading error:", error);
   }
 
-  // Register only the /youtube command in every server where the bot is installed.
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+  const command = youtubeCommand.toJSON();
+
+  console.log(`🔧 Found ${client.guilds.cache.size} server(s). Registering /youtube...`);
+
   for (const guild of client.guilds.cache.values()) {
     try {
-      await guild.commands.set([youtubeCommand.toJSON()]);
-      console.log(`✅ /youtube registered in: ${guild.name}`);
+      await rest.put(
+        Routes.applicationGuildCommands(client.user.id, guild.id),
+        { body: [command] }
+      );
+      console.log(`✅ /youtube registered in: ${guild.name} (${guild.id})`);
     } catch (error) {
-      console.error(`❌ Could not register command in ${guild.name}:`, error);
+      console.error(`❌ Failed to register /youtube in ${guild.name}:`, error);
     }
   }
 
@@ -65,7 +74,6 @@ client.on("interactionCreate", async interaction => {
 
   const link = interaction.options.getString("link", true).trim();
 
-  // Accept normal YouTube links, youtu.be links and YouTube Music links.
   let url;
   try {
     url = new URL(link);
@@ -90,11 +98,11 @@ client.on("interactionCreate", async interaction => {
     });
   }
 
-  const memberChannel = interaction.member?.voice?.channel;
+  const voiceChannel = interaction.member?.voice?.channel;
 
-  if (!memberChannel) {
+  if (!voiceChannel) {
     return interaction.reply({
-      content: "❌ سەرەتا خۆت بچۆ ناو Voice Channel، پاشان `/youtube` بەکاربهێنە.",
+      content: "❌ سەرەتا بچۆ ناو Voice Channel، پاشان /youtube بەکاربهێنە.",
       ephemeral: true
     });
   }
@@ -102,11 +110,9 @@ client.on("interactionCreate", async interaction => {
   await interaction.deferReply();
 
   try {
-    const { track } = await player.play(memberChannel, link, {
+    const result = await player.play(voiceChannel, link, {
       nodeOptions: {
-        metadata: {
-          channel: interaction.channel
-        },
+        metadata: { channel: interaction.channel },
         leaveOnEnd: true,
         leaveOnEmpty: true,
         leaveOnEmptyCooldown: 30000,
@@ -114,24 +120,23 @@ client.on("interactionCreate", async interaction => {
       }
     });
 
+    const track = result.track;
+
     const embed = new EmbedBuilder()
       .setTitle("🎵 ئێستا دەخوێنرێت")
       .setDescription(`**${track.title}**`)
-      .addFields({
-        name: "🔗 لینک",
-        value: `[YouTube](${link})`
-      })
-      .setThumbnail(track.thumbnail || null)
+      .addFields({ name: "🔗 لینک", value: `[YouTube](${link})` })
       .setTimestamp();
+
+    if (track.thumbnail) embed.setThumbnail(track.thumbnail);
 
     await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error("❌ Playback error:", error);
-
     await interaction.editReply({
       content:
-        "❌ نەتوانرا ئەم گۆرانییە پەخش بکرێت.\n" +
-        "دڵنیابە لینکەکەی YouTube دروستە و بۆتەکە Permission ـی **Connect** و **Speak** ـی هەیە."
+        "❌ نەتوانرا گۆرانییەکە پەخش بکرێت.\n" +
+        "دڵنیابە لینکەکەی YouTube دروستە و بۆتەکە Permission ـی Connect و Speak ـی هەیە."
     });
   }
 });

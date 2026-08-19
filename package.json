@@ -1,7 +1,6 @@
 {
   "name": "youtube-discord-bot",
-  "version": "1.0.0",
-  "description": "Simple Discord music bot with /youtube URL playback",
+  "version": "1.0.1",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
