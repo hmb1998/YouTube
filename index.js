@@ -1,74 +1,42 @@
-require("dotenv").config();
-const { Client, GatewayIntentBits } = require("discord.js");
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require("@discordjs/voice");
-const ytdl = require("@distube/ytdl-core");
+const { Client, GatewayIntentBits } = require('discord.js');
+const ytdl = require('@distube/ytdl-core');
+const { joinVoiceChannel, createAudioResource, createAudioPlayer, AudioPlayerStatus } = require('@discordjs/voice');
 
-const client = new Client({ 
-  intents: [
-    GatewayIntentBits.Guilds, 
-    GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ] 
-});
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates] });
 
-client.once("ready", () => {
-  console.log("✅ Bot is ready and running perfectly!");
-});
+// لێرە کووکییەکەت لە سێکریتەوە وەردەگرێت
+const agent = ytdl.createAgent(JSON.parse(process.env.COOKIE || "{}"));
 
-client.on("messageCreate", async (message) => {
-  if (message.author.bot || !message.content.startsWith("!play")) return;
+client.on('messageCreate', async (message) => {
+    if (message.content.startsWith('!play')) {
+        const args = message.content.split(' ');
+        const url = args[1];
 
-  let channel = message.member?.voice?.channel;
-  if (!channel) {
-    channel = message.guild.channels.cache.find(ch => ch.type === 2);
-  }
+        if (!url) return message.reply('تکایە لینکێک بنێرە!');
 
-  if (!channel) return message.reply("❌ هیچ ڤۆیس چەنڵێک نەدۆزرایەوە.");
+        const channel = message.member.voice.channel;
+        if (!channel) return message.reply('تکایە بچۆ ناو چەنلێکی ڤۆیس!');
 
-  const args = message.content.split(" ");
-  const url = args[1];
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            adapterCreator: channel.guild.voiceAdapterCreator,
+        });
 
-  if (!url || !url.startsWith("http")) {
-    return message.reply("❌ تکایە فەرمانەکە بەم شێوەیە بنووسە: `!play [لینک]`");
-  }
+        const player = createAudioPlayer();
+        connection.subscribe(player);
 
-  const replyMsg = await message.reply("🎵 خەریکە گۆرانییەکە دەست پێدەکات...");
-
-  try {
-    const connection = joinVoiceChannel({ 
-      channelId: channel.id, 
-      guildId: channel.guild.id, 
-      adapterCreator: channel.guild.voiceAdapterCreator,
-      selfDeaf: false,
-      selfMute: false
-    });
-
-    const stream = ytdl(url, { 
-      quality: 'highestaudio', 
-      agent: undefined,
-      requestOptions: {
-        headers: {
-          cookie: process.env.COOKIE
+        try {
+            // بەکارهێنانی کووکییەکە بۆ دابەزاندنی گۆرانییەکە
+            const stream = ytdl(url, { agent, filter: 'audioonly' });
+            const resource = createAudioResource(stream);
+            player.play(resource);
+            message.reply('گۆرانییەکە دەستی پێکرد!');
+        } catch (error) {
+            console.error(error);
+            message.reply('کێشەیەک ڕوویدا لە لێدانی گۆرانییەکە.');
         }
-      }
-    });
-
-    const resource = createAudioResource(stream);
-    const player = createAudioPlayer();
-    
-    player.play(resource);
-    connection.subscribe(player);
-
-    player.once(AudioPlayerStatus.Idle, () => {
-      try { connection.destroy(); } catch {}
-    });
-
-    await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لە ڤۆیسی (**${channel.name}**) لێدەدرێت!`);
-  } catch (err) {
-    console.error("LOG ERROR:", err);
-    await replyMsg.edit(`❌ یوتیوب داواکارییەکەی ڕەتکردەوە. تکایە لینکێکی تر تاقی بکەرەوە.`);
-  }
+    }
 });
 
-client.login(process.env.TOKEN);
+client.login('YOUR_DISCORD_BOT_TOKEN'); // تۆکنەکەی دیسکۆردەکەت لێرە دابنێ
