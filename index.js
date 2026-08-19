@@ -10,7 +10,7 @@ client.once("ready", async () => {
   const command = new SlashCommandBuilder()
     .setName("play")
     .setDescription("Play music from YouTube")
-    .addStringOption(opt => opt.setName("url").setDescription("YouTube URL").setRequired(true));
+    .addStringOption(opt => opt.setName("song").setDescription("YouTube URL").setRequired(true));
 
   for (const guild of client.guilds.cache.values()) {
     await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [command.toJSON()] });
@@ -24,11 +24,12 @@ client.on("interactionCreate", async interaction => {
   const channel = interaction.member?.voice?.channel;
   if (!channel) return interaction.reply({ content: "❌ تکایە سەرەتا بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
 
-  const url = interaction.options.getString("url");
+  const url = interaction.options.getString("song");
+  if (!url) return interaction.reply({ content: "❌ تکایە لینک بنووسە.", ephemeral: true });
+
   await interaction.deferReply();
 
   try {
-    // ڕاستەوخۆ لە یوتیوب دەنگەکە دەهێنێت
     const stream = await play.stream(url);
     const resource = createAudioResource(stream.stream, { inputType: stream.type });
 
