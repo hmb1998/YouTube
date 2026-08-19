@@ -9,6 +9,6 @@
     "@discordjs/voice": "^0.16.1",
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
-    "yt-dlp-exec": "^0.0.19"
+    "yt-dlp-exec": "latest"
   }
 }
