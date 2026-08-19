@@ -12,6 +12,11 @@ const client = new Client({
     ] 
 });
 
+// بەکارهێنانی کووکی کە لە Fly.io (بەناوی COOKIE) داتناوە بۆ تێپەڕاندنی قەدەغەکردنی یوتیوب
+if (process.env.COOKIE) {
+    play.setCookie(process.env.COOKIE);
+}
+
 client.once('ready', () => {
     console.log('✅ Bot is ready and running perfectly!');
 });
@@ -52,7 +57,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// سێرڤەری وێب بۆ وەڵامدانەوەی پێداویستییەکانی پلاتفۆرمی Fly.io
+// سێرڤەری وێب بۆ وەڵامدانەوەی پێداویستییەکانی پلاتفۆرمی Fly.io و ڕێگریکردن لە ڕیستارت
 const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
