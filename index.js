@@ -1,66 +1,39 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const play = require('play-dl');
-const { joinVoiceChannel, createAudioResource, createAudioPlayer } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioResource, createAudioPlayer, StreamType } = require('@discordjs/voice');
+const ytdl = require('ytdl-core');
 const http = require('http');
 
 const client = new Client({ 
-    intents: [
-        GatewayIntentBits.Guilds, 
-        GatewayIntentBits.GuildMessages, 
-        GatewayIntentBits.MessageContent, 
-        GatewayIntentBits.GuildVoiceStates
-    ] 
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates] 
 });
 
-client.once('ready', () => {
-    console.log('✅ Bot is ready and running perfectly!');
-});
+client.once('ready', () => console.log('✅ Bot is ready!'));
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.content.startsWith('!play')) return;
 
-    const args = message.content.split(' ');
-    const url = args[1];
-
-    if (!url) return message.reply('❌ تکایە لینکێکی یوتیوب بنێرە!');
+    const url = message.content.split(' ')[1];
+    if (!url || !ytdl.validateURL(url)) return message.reply('❌ لینکەکە هەڵەیە!');
 
     const channel = message.member?.voice?.channel;
-    if (!channel) return message.reply('❌ تکایە سەرەتا بچۆ ناو چەنلێکی ڤۆیس!');
+    if (!channel) return message.reply('❌ سەرەتا بچۆ ناو ڤۆیس!');
 
-    const replyMsg = await message.reply('🎵 خەریکە گۆرانییەکە دەست پێدەکات...');
+    const player = createAudioPlayer();
+    const connection = joinVoiceChannel({ channelId: channel.id, guildId: channel.guild.id, adapterCreator: channel.guild.voiceAdapterCreator });
+    connection.subscribe(player);
 
     try {
-        const connection = joinVoiceChannel({
-            channelId: channel.id,
-            guildId: channel.guild.id,
-            adapterCreator: channel.guild.voiceAdapterCreator,
-        });
-
-        const player = createAudioPlayer();
-        connection.subscribe(player);
-
-        let streamData = await play.stream(url);
-        const resource = createAudioResource(streamData.stream, {
-            inputType: streamData.type
-        });
-        
+        const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 });
+        const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary });
         player.play(resource);
-        await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لێدەدرێت!`);
-    } catch (error) {
-        console.error("LOG ERROR:", error);
-        await replyMsg.edit('❌ کێشەیەک ڕوویدا، دڵنیا ببەوە لەوەی لینکەکە ڕاستە.');
+        message.reply('🎵 گۆرانییەکە دەستی پێکرد!');
+    } catch (e) {
+        console.error(e);
+        message.reply('❌ کێشەیەک ڕوویدا لە لێدانی گۆرانییەکە.');
     }
 });
 
-// سێرڤەری وێب بۆ پۆرت 8080 تا Fly.io ڕیستارتی نەکاتەوە
-const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('OK');
-});
-
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-    console.log(`HTTP Server is listening on port ${PORT}`);
-});
+// سێرڤەری وێب بۆ ئەوەی Fly.io بۆتەکەت نەوەستێنێت
+http.createServer((req, res) => res.end('OK')).listen(process.env.PORT || 8080);
 
 client.login(process.env.TOKEN);
