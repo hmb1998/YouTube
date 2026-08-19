@@ -40,18 +40,13 @@ const guildPlayers = new Map();
 async function playSound(interaction, voiceChannel, link) {
   const guildId = interaction.guild.id;
 
-  // پاککردنەوەی پێشو
   if (guildPlayers.has(guildId)) {
     const current = guildPlayers.get(guildId);
     try { current.player.stop(); current.connection.destroy(); } catch {}
   }
 
-  // وەرگرتنی ستریم لە ڕێگەی play-dl
-  let source = await playdl.search(link, { limit: 1, source: { soundcloud: "each" } });
-  if (source.length === 0) throw new Error("NO_RESULTS");
-  
-  const song = source[0];
-  const stream = await playdl.stream(song.url);
+  // وەرگرتنی ڕاستەوخۆی ستریم لە لینکەوە بەبێ گەڕان
+  const stream = await playdl.stream(link);
 
   const connection = joinVoiceChannel({
     channelId: voiceChannel.id,
@@ -73,7 +68,7 @@ async function playSound(interaction, voiceChannel, link) {
     guildPlayers.delete(guildId);
   });
 
-  return { title: song.title, thumbnail: song.thumbnail?.url };
+  return { title: link };
 }
 
 client.once("ready", async () => {
@@ -82,8 +77,8 @@ client.once("ready", async () => {
   const rest = new REST({ version: "10" }).setToken(TOKEN);
   const command = new SlashCommandBuilder()
     .setName("play")
-    .setDescription("Play from SoundCloud")
-    .addStringOption(opt => opt.setName("link").setDescription("Song name or link").setRequired(true));
+    .setDescription("Play from SoundCloud link")
+    .addStringOption(opt => opt.setName("link").setDescription("SoundCloud track link").setRequired(true));
 
   for (const guild of client.guilds.cache.values()) {
     await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [command.toJSON()] });
@@ -94,15 +89,20 @@ client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand() || interaction.commandName !== "play") return;
   
   const voiceChannel = interaction.member?.voice?.channel;
-  if (!voiceChannel) return interaction.reply({ content: "❌ بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
+  if (!voiceChannel) return interaction.reply({ content: "❌ سەرەتا بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
+
+  const link = interaction.options.getString("link", true).trim();
+  if (!link.includes("soundcloud.com")) {
+    return interaction.reply({ content: "❌ تکایە لینکی دروستی SoundCloud دابنە.", ephemeral: true });
+  }
 
   await interaction.deferReply();
   try {
-    const song = await playSound(interaction, voiceChannel, interaction.options.getString("link"));
-    await interaction.editReply({ embeds: [new EmbedBuilder().setTitle("🎵 ئێستا لێدەدرێت").setDescription(song.title)] });
+    const song = await playSound(interaction, voiceChannel, link);
+    await interaction.editReply({ embeds: [new EmbedBuilder().setTitle("🎵 ئێستا لێدەدرێت").setDescription(`[SoundCloud Link](${song.title})`)] });
   } catch (e) {
     console.error(e);
-    await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا." });
+    await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا لە وەرگرتنی گۆرانییەکە." });
   }
 });
 
