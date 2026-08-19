@@ -1,39 +1,78 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel, createAudioResource, createAudioPlayer, StreamType } = require('@discordjs/voice');
-const ytdl = require('ytdl-core');
+const { spawn } = require('child_process');
 const http = require('http');
 
 const client = new Client({ 
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates] 
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent, 
+        GatewayIntentBits.GuildVoiceStates
+    ] 
 });
 
-client.once('ready', () => console.log('✅ Bot is ready!'));
+client.once('ready', () => {
+    console.log('✅ Bot is ready and running with yt-dlp!');
+});
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.content.startsWith('!play')) return;
 
-    const url = message.content.split(' ')[1];
-    if (!url || !ytdl.validateURL(url)) return message.reply('❌ لینکەکە هەڵەیە!');
+    const args = message.content.split(' ');
+    const url = args[1];
+
+    if (!url) return message.reply('❌ تکایە لینکێکی یوتیوب بنێرە!');
 
     const channel = message.member?.voice?.channel;
-    if (!channel) return message.reply('❌ سەرەتا بچۆ ناو ڤۆیس!');
+    if (!channel) return message.reply('❌ سەرەتا بچۆ ناو چەنلێکی ڤۆیس!');
 
-    const player = createAudioPlayer();
-    const connection = joinVoiceChannel({ channelId: channel.id, guildId: channel.guild.id, adapterCreator: channel.guild.voiceAdapterCreator });
-    connection.subscribe(player);
+    const replyMsg = await message.reply('🎵 خەریکە گۆرانییەکە دەست پێدەکات...');
 
     try {
-        const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 });
-        const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary });
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            adapterCreator: channel.guild.voiceAdapterCreator,
+        });
+
+        const player = createAudioPlayer();
+        connection.subscribe(player);
+
+        // بەکارهێنانی yt-dlp بۆ وەرگرتنی دەنگەکە بە ڕاستەوخۆیی
+        const ytProcess = spawn('yt-dlp', [
+            '-x',
+            '--audio-format', 'opus',
+            '-o', '-',
+            url
+        ]);
+
+        const resource = createAudioResource(ytProcess.stdout, {
+            inputType: StreamType.Opus
+        });
+
         player.play(resource);
-        message.reply('🎵 گۆرانییەکە دەستی پێکرد!');
-    } catch (e) {
-        console.error(e);
-        message.reply('❌ کێشەیەک ڕوویدا لە لێدانی گۆرانییەکە.');
+        await replyMsg.edit('🎵 ئێستا گۆرانییەکە لێدەدرێت!');
+
+        ytProcess.stderr.on('data', (data) => {
+            console.error(`yt-dlp error: ${data}`);
+        });
+
+    } catch (error) {
+        console.error("LOG ERROR:", error);
+        await replyMsg.edit('❌ کێشەیەک ڕووی دا لە لێدانی گۆرانییەکە.');
     }
 });
 
-// سێرڤەری وێب بۆ ئەوەی Fly.io بۆتەکەت نەوەستێنێت
-http.createServer((req, res) => res.end('OK')).listen(process.env.PORT || 8080);
+// سێرڤەری وێب بۆ پۆرت 8080 تا Fly.io بۆتەکەت نەوەستێنێت
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
+});
+
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+    console.log(`HTTP Server is listening on port ${PORT}`);
+});
 
 client.login(process.env.TOKEN);
