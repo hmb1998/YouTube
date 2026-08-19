@@ -1,4 +1,5 @@
 require("dotenv").config();
+require("opusscript"); // زیادکرا بۆ چارەسەرکردنی کێشەی دەنگ لە Discord Voice
 
 const {
   Client,
@@ -72,9 +73,6 @@ function isYouTubeUrl(input) {
 }
 
 async function getAudioStream(videoId) {
-  // YouTube increasingly serves some WEB requests through SABR, where
-  // formats may not contain a normal URL/cipher. Try clients that still
-  // expose regular streaming formats first, and prefer an existing URL.
   const clients = ["TV", "IOS", "ANDROID", "WEB"];
   let lastError = null;
   let selectedInfo = null;
@@ -94,9 +92,6 @@ async function getAudioStream(videoId) {
       const format = info.chooseFormat({ type: "audio", quality: "best" });
       if (!format) continue;
 
-      // Some YouTube clients return a ready-to-use URL. Do not call
-      // decipher() on those formats; doing so can trigger
-      // "No valid URL to decipher" when the format has no cipher.
       if (typeof format.url === "string" && format.url.startsWith("http")) {
         streamUrl = format.url;
       } else {
@@ -181,7 +176,6 @@ async function playYouTube(interaction, voiceChannel, link, videoId) {
     behaviors: { noSubscriber: NoSubscriberBehavior.Play }
   });
 
-  // FFmpeg converts YouTube's audio stream to raw PCM for Discord voice.
   const ffmpegPath = require("ffmpeg-static");
   const ffmpeg = spawn(ffmpegPath, [
     "-hide_banner",
