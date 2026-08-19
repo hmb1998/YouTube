@@ -26,7 +26,6 @@ client.on("messageCreate", async (message) => {
 
   if (!channel) return message.reply("❌ هیچ ڤۆیس چەنڵێک نەدۆزرایەوە.");
 
-  // دۆزینەوەی ڕاستەوخۆی لینک لە پەیامەکەدا بە بێ هیچ دەستکارییەک
   const args = message.content.split(" ");
   const url = args[1];
 
@@ -45,10 +44,19 @@ client.on("messageCreate", async (message) => {
       selfMute: false
     });
 
-    const stream = await play.stream(url);
-    const resource = createAudioResource(stream.stream, { inputType: stream.type });
+    // بەکارهێنانی سێتینگێکی تایبەت بۆ تێپەڕاندنی قەدەغەکردنی یوتیوب
+    let stream;
+    try {
+      stream = await play.stream(url, { discordPlayerCompatibility: true });
+    } catch {
+      // ئەگەر سەرەتا نەبوو، بە ڕێگەی تش ئای پی تاقی دەکاتەوە
+      const info = await play.video_info(url);
+      stream = await play.stream_from_info(info, { discordPlayerCompatibility: true });
+    }
 
+    const resource = createAudioResource(stream.stream, { inputType: stream.type });
     const player = createAudioPlayer();
+    
     player.play(resource);
     connection.subscribe(player);
 
@@ -59,7 +67,7 @@ client.on("messageCreate", async (message) => {
     await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لە ڤۆیسی (**${channel.name}**) لێدەدرێت!`);
   } catch (err) {
     console.error("LOG ERROR:", err);
-    await replyMsg.edit(`❌ هەڵە لە لێدانی گۆرانی: ${err.message || "نەتوانرا ڤیدیۆکە بخوێنرێتەوە"}`);
+    await replyMsg.edit(`❌ یوتیوب ڕێگری لە سێرڤەرەکە کرد (Error 429). تکایە کەمێکی تر هەوڵ بدەوە.`);
   }
 });
 
