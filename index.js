@@ -27,47 +27,31 @@ const playdl = require("play-dl");
 const TOKEN = process.env.TOKEN;
 
 if (!TOKEN) {
-  console.error("❌ TOKEN is missing in Railway Variables.");
+  console.error("❌ TOKEN is missing.");
   process.exit(1);
 }
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildVoiceStates
-  ]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates]
 });
 
 const guildPlayers = new Map();
 
-function stopGuild(guildId) {
-  const current = guildPlayers.get(guildId);
-  if (!current) return;
-
-  try { current.player.stop(); } catch {}
-  try { current.connection.destroy(); } catch {}
-  guildPlayers.delete(guildId);
-}
-
-async function playSoundCloud(interaction, voiceChannel, link) {
+async function playSound(interaction, voiceChannel, link) {
   const guildId = interaction.guild.id;
 
-  const me = interaction.guild.members.me;
-  const perms = voiceChannel.permissionsFor(me);
-
-  if (!perms?.has(PermissionsBitField.Flags.ViewChannel)) throw new Error("BOT_NO_VIEW_CHANNEL");
-  if (!perms?.has(PermissionsBitField.Flags.Connect)) throw new Error("BOT_NO_CONNECT");
-  if (!perms?.has(PermissionsBitField.Flags.Speak)) throw new Error("BOT_NO_SPEAK");
-
-  if (me?.voice?.channelId && me.voice.channelId !== voiceChannel.id) {
-    throw new Error("BOT_IN_OTHER_VOICE");
+  // پاککردنەوەی پێشو
+  if (guildPlayers.has(guildId)) {
+    const current = guildPlayers.get(guildId);
+    try { current.player.stop(); current.connection.destroy(); } catch {}
   }
 
-  stopGuild(guildId);
-
-  // پشکنین و وەرگرتنی ستریمی ساوندکلۆد
-  const scData = await playdl.soundcloud(link);
-  const stream = await playdl.stream_soundcloud(link);
+  // وەرگرتنی ستریم لە ڕێگەی play-dl
+  let source = await playdl.search(link, { limit: 1, source: { soundcloud: "each" } });
+  if (source.length === 0) throw new Error("NO_RESULTS");
+  
+  const song = source[0];
+  const stream = await playdl.stream(song.url);
 
   const connection = joinVoiceChannel({
     channelId: voiceChannel.id,
@@ -76,112 +60,49 @@ async function playSoundCloud(interaction, voiceChannel, link) {
     selfDeaf: true
   });
 
-  await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-
-  const player = createAudioPlayer({
-    behaviors: { noSubscriber: NoSubscriberBehavior.Play }
-  });
-
-  const resource = createAudioResource(stream.stream, {
-    inputType: stream.type,
-    inlineVolume: false
-  });
+  const player = createAudioPlayer();
+  const resource = createAudioResource(stream.stream, { inputType: stream.type });
 
   player.play(resource);
   connection.subscribe(player);
 
-  const state = { player, connection };
-  guildPlayers.set(guildId, state);
+  guildPlayers.set(guildId, { player, connection });
 
   player.once(AudioPlayerStatus.Idle, () => {
-    if (guildPlayers.get(guildId)?.player === player) {
-      try { connection.destroy(); } catch {}
-      guildPlayers.delete(guildId);
-    }
+    connection.destroy();
+    guildPlayers.delete(guildId);
   });
 
-  player.on("error", error => {
-    console.error("❌ Discord audio player error:", error);
-    if (guildPlayers.get(guildId)?.player === player) {
-      try { connection.destroy(); } catch {}
-      guildPlayers.delete(guildId);
-    }
-  });
-
-  return {
-    title: scData.name || "SoundCloud Track",
-    thumbnail: scData.thumbnail || null
-  };
+  return { title: song.title, thumbnail: song.thumbnail?.url };
 }
 
-const soundcloudCommand = new SlashCommandBuilder()
-  .setName("play")
-  .setDescription("Play a SoundCloud song in your voice channel")
-  .addStringOption(option =>
-    option
-      .setName("link")
-      .setDescription("SoundCloud track link")
-      .setRequired(true)
-  );
-
 client.once("ready", async () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-
+  console.log("✅ Bot is ready and stable!");
+  
   const rest = new REST({ version: "10" }).setToken(TOKEN);
-  const command = soundcloudCommand.toJSON();
+  const command = new SlashCommandBuilder()
+    .setName("play")
+    .setDescription("Play from SoundCloud")
+    .addStringOption(opt => opt.setName("link").setDescription("Song name or link").setRequired(true));
 
   for (const guild of client.guilds.cache.values()) {
-    try {
-      await rest.put(
-        Routes.applicationGuildCommands(client.user.id, guild.id),
-        { body: [command] }
-      );
-    } catch (error) {
-      console.error(`❌ Failed to register /play in ${guild.name}:`, error);
-    }
+    await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [command.toJSON()] });
   }
-
-  console.log("🎵 SoundCloud music bot is ready!");
 });
 
 client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-  if (interaction.commandName !== "play") return;
-
-  const link = interaction.options.getString("link", true).trim();
-
-  if (!link.includes("soundcloud.com")) {
-    return interaction.reply({
-      content: "❌ تکایە لینکی دروستی SoundCloud بنێرە.",
-      ephemeral: true
-    });
-  }
-
+  if (!interaction.isChatInputCommand() || interaction.commandName !== "play") return;
+  
   const voiceChannel = interaction.member?.voice?.channel;
-
-  if (!voiceChannel) {
-    return interaction.reply({
-      content: "❌ سەرەتا بچۆ ناو Voice Channel، پاشان /play بەکاربهێنە.",
-      ephemeral: true
-    });
-  }
+  if (!voiceChannel) return interaction.reply({ content: "❌ بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
 
   await interaction.deferReply();
-
   try {
-    const data = await playSoundCloud(interaction, voiceChannel, link);
-
-    const embed = new EmbedBuilder()
-      .setTitle("🎵 ئێستا دەخوێنرێت (SoundCloud)")
-      .setDescription(`**${data.title}**`)
-      .addFields({ name: "🔗 لینک", value: `[SoundCloud](${link})` })
-      .setTimestamp();
-
-    if (data.thumbnail) embed.setThumbnail(data.thumbnail);
-    await interaction.editReply({ embeds: [embed] });
-  } catch (error) {
-    console.error("❌ Playback error:", error);
-    await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا لە پەخشکردنی گۆرانییەکە." });
+    const song = await playSound(interaction, voiceChannel, interaction.options.getString("link"));
+    await interaction.editReply({ embeds: [new EmbedBuilder().setTitle("🎵 ئێستا لێدەدرێت").setDescription(song.title)] });
+  } catch (e) {
+    console.error(e);
+    await interaction.editReply({ content: "❌ کێشەیەک ڕوویدا." });
   }
 });
 
