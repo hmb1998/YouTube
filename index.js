@@ -1,7 +1,7 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require("@discordjs/voice");
-const https = require('https');
+const play = require("play-dl");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
 
@@ -28,45 +28,29 @@ client.on("interactionCreate", async interaction => {
   await interaction.deferReply();
 
   try {
-    https.get(`https://api.cobalt.tools/api/json?url=${encodeURIComponent(url)}`, {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', async () => {
-        try {
-          const json = JSON.parse(data);
-          const audioUrl = json.url || json.picker?.[0]?.url;
-          
-          if (!audioUrl) return interaction.editReply("❌ نەتوانرا دەنگی ئەم لینکە وەربگیرێت.");
+    // ڕاستەوخۆ لە یوتیوب دەنگەکە دەهێنێت
+    const stream = await play.stream(url);
+    const resource = createAudioResource(stream.stream, { inputType: stream.type });
 
-          const connection = joinVoiceChannel({ 
-            channelId: channel.id, 
-            guildId: channel.guild.id, 
-            adapterCreator: channel.guild.voiceAdapterCreator,
-            selfDeaf: true 
-          });
-
-          const player = createAudioPlayer();
-          const resource = createAudioResource(audioUrl);
-          
-          player.play(resource);
-          connection.subscribe(player);
-
-          player.once(AudioPlayerStatus.Idle, () => {
-            try { connection.destroy(); } catch {}
-          });
-
-          await interaction.editReply("🎵 گۆرانییەکە دەستی پێکرد!");
-        } catch (err) {
-          await interaction.editReply("❌ هەڵە لە شیکردنەوەی داتاکە.");
-        }
-      });
-    }).on('error', async () => {
-      await interaction.editReply("❌ کێشەی ئینتەرنێت هەیە.");
+    const connection = joinVoiceChannel({ 
+      channelId: channel.id, 
+      guildId: channel.guild.id, 
+      adapterCreator: channel.guild.voiceAdapterCreator,
+      selfDeaf: true 
     });
-  } catch (e) {
-    await interaction.editReply("❌ هەڵەیەک ڕوویدا.");
+
+    const player = createAudioPlayer();
+    player.play(resource);
+    connection.subscribe(player);
+
+    player.once(AudioPlayerStatus.Idle, () => {
+      try { connection.destroy(); } catch {}
+    });
+
+    await interaction.editReply("🎵 گۆرانییەکە دەستی پێکرد!");
+  } catch (err) {
+    console.error("LOG ERROR:", err);
+    await interaction.editReply(`❌ هەڵەیەک ڕوویدا: ${err.message || "نەتوانرا گۆرانییەکە لێبدرێت"}`);
   }
 });
 
