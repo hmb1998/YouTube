@@ -1,5 +1,5 @@
 require("dotenv").config();
-require("opusscript"); // زیادکرا بۆ چارەسەرکردنی کێشەی دەنگ لە Discord Voice
+require("opusscript");
 
 const {
   Client,
@@ -39,7 +39,6 @@ const client = new Client({
   ]
 });
 
-// YouTube.js is ESM, so we load it dynamically from this CommonJS file.
 let youtube;
 const guildPlayers = new Map();
 
@@ -73,52 +72,43 @@ function isYouTubeUrl(input) {
 }
 
 async function getAudioStream(videoId) {
-  let lastError = null;
-  let selectedInfo = null;
-  let selectedFormat = null;
+  const info = await youtube.getBasicInfo(videoId);
+  const status = info.playability_status?.status;
+
+  if (status && status !== "OK") {
+    throw new Error(`YouTube playability status: ${status}`);
+  }
+
+  const formats = info.streaming_data?.formats || [];
+  const adaptiveFormats = info.streaming_data?.adaptive_formats || [];
+  const allFormats = [...formats, ...adaptiveFormats];
+
   let streamUrl = null;
-
-  try {
-    const info = await youtube.getBasicInfo(videoId);
-    const status = info.playability_status?.status;
-
-    if (!status || status === "OK") {
-      const format = info.chooseFormat({ type: "audio", quality: "best" });
-      if (format) {
-        if (typeof format.url === "string" && format.url.startsWith("http")) {
-          streamUrl = format.url;
-        } else {
-          try {
-            const deciphered = await format.decipher(youtube.session.player);
-            if (typeof deciphered === "string" && deciphered.startsWith("http")) {
-              streamUrl = deciphered;
-            }
-          } catch (error) {
-            lastError = error;
-          }
-        }
-
-        if (streamUrl) {
-          selectedInfo = info;
-          selectedFormat = format;
-          console.log(`✅ YouTube audio format obtained successfully`);
-        }
-      }
-    } else {
-      lastError = new Error(`YouTube playability status: ${status}`);
+  for (const fmt of allFormats) {
+    if (fmt.url && (fmt.mime_type?.includes("audio") || fmt.type?.includes("audio"))) {
+      streamUrl = fmt.url;
+      break;
     }
-  } catch (error) {
-    lastError = error;
   }
 
-  if (!selectedInfo || !selectedFormat || !streamUrl) {
-    throw lastError || new Error("No playable YouTube audio stream found.");
+  // ئەگەر لینکی ڕاستەوخۆ نەدۆزرایەوە، با chooseFormat تاقی بکەینەوە بێ decipher
+  if (!streamUrl) {
+    const format = info.chooseFormat({ type: "audio", quality: "best" });
+    if (format && typeof format.url === "string" && format.url.startsWith("http")) {
+      streamUrl = format.url;
+    }
   }
+
+  if (!streamUrl) {
+    throw new Error("No direct playable YouTube audio stream found.");
+  }
+
+  console.log("✅ YouTube audio stream obtained successfully");
 
   return {
-    title: selectedInfo.basic_info?.title || "YouTube",
-    author: selectedInfo.basic_info?.author || "",
-    thumbnail: selectedInfo.basic_info?.thumbnail?.[0]?.url || null,
+    title: info.basic_info?.title || "YouTube",
+    author: info.basic_info?.author || "",
+    thumbnail: info.basic_info?.thumbnail?.[0]?.url || null,
     streamUrl
   };
 }
