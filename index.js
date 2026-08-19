@@ -13,7 +13,7 @@ const client = new Client({
 });
 
 client.once('ready', () => {
-    console.log('✅ Bot is ready and running with yt-dlp & cookies!');
+    console.log('✅ Bot is ready and running with yt-dlp & path-fixed cookies!');
 });
 
 client.on('messageCreate', async (message) => {
@@ -39,9 +39,9 @@ client.on('messageCreate', async (message) => {
         const player = createAudioPlayer();
         connection.subscribe(player);
 
-        // لێرەدا فایلەکە کووکییەکەت بەکاردەهێنێت
+        // ئاماژەدان بە ڕێڕەوی تەواوی فایلەکە لەناو سێرڤەرەکەدا
         const ytProcess = spawn('yt-dlp', [
-            '--cookies', 'cookies.txt',
+            '--cookies', '/app/cookies.txt',
             '-x',
             '--audio-format', 'opus',
             '-o', '-',
