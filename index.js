@@ -44,7 +44,7 @@ client.on("messageCreate", async (message) => {
       selfMute: false
     });
 
-    const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 });
+    const stream = ytdl(url, { quality: 'highestaudio', agent: undefined });
     const resource = createAudioResource(stream);
     const player = createAudioPlayer();
     
@@ -58,7 +58,7 @@ client.on("messageCreate", async (message) => {
     await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لە ڤۆیسی (**${channel.name}**) لێدەدرێت!`);
   } catch (err) {
     console.error("LOG ERROR:", err);
-    await replyMsg.edit(`❌ هەڵەیەک ڕوودا لە لێدانی گۆرانییەکە. دڵنیا ببەوە لە ڕاستی لینکەکە.`);
+    await replyMsg.edit(`❌ یوتیوب داواکارییەکەی ڕەتکردەوە. تکایە لینکێکی تر تاقی بکەرەوە.`);
   }
 });
 
