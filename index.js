@@ -1,70 +1,51 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require("discord.js");
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType } = require("@discordjs/voice");
-const { exec } = require('yt-dlp-exec');
+const { Client, GatewayIntentBits } = require("discord.js");
+const { DisTube } = require("distube");
+const { SpotifyPlugin } = require("@distube/spotify");
+const { YtDlpPlugin } = require("@distube/yt-dlp");
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
-
-client.once("ready", async () => {
-  const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-  const command = new SlashCommandBuilder()
-    .setName("radio")
-    .setDescription("Play YouTube audio")
-    .addStringOption(opt => opt.setName("url").setDescription("YouTube URL").setRequired(true));
-
-  for (const guild of client.guilds.cache.values()) {
-    await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [command.toJSON()] });
-  }
-  console.log("✅ Bot is ready!");
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== "radio") return;
+const distube = new DisTube(client, {
+  leaveOnStop: true,
+  emitNewSongOnly: true,
+  plugins: [new SpotifyPlugin(), new YtDlpPlugin()],
+});
+
+client.once("ready", () => {
+  console.log("✅ Bot is online and ready to play music!");
+});
+
+client.on("messageCreate", async (message) => {
+  if (message.author.bot || !message.content.startsWith("!")) return;
   
-  const channel = interaction.member?.voice?.channel;
-  if (!channel) return interaction.reply({ content: "❌ سەرەتا بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
+  const args = message.content.slice(1).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
 
-  const url = interaction.options.getString("url");
-  if (!url.includes("http")) {
-    return interaction.reply({ content: "❌ تکایە لینکی ڕاستەوخۆ دابنە.", ephemeral: true });
-  }
-
-  await interaction.deferReply();
-
-  try {
-    const output = await exec(url, {
-      print: '%(url)s',
-      format: 'bestaudio',
-      noCheckCertificates: true,
-      noWarnings: true,
-      preferFreeFormats: true
-    });
-
-    const audioUrl = output.stdout.trim().split('\n').pop();
-    if (!audioUrl) throw new Error("Could not get audio URL");
-
-    const connection = joinVoiceChannel({ 
-      channelId: channel.id, 
-      guildId: channel.guild.id, 
-      adapterCreator: channel.guild.voiceAdapterCreator,
-      selfDeaf: true 
-    });
-
-    const player = createAudioPlayer();
-    const resource = createAudioResource(audioUrl, { inputType: StreamType.Arbitrary });
+  if (command === "play") {
+    const voiceChannel = message.member.voice.channel;
+    if (!voiceChannel) return message.reply("❌ تکایە بچۆ ناو ڤۆیس چەنڵ.");
     
-    player.play(resource);
-    connection.subscribe(player);
-
-    player.once(AudioPlayerStatus.Idle, () => {
-      try { connection.destroy(); } catch {}
+    const song = args.join(" ");
+    if (!song) return message.reply("❌ تکایە ناوی گۆرانی یان لینکی یوتیوب بنووسە.");
+    
+    distube.play(voiceChannel, song, {
+      member: message.member,
+      textChannel: message.channel,
+      message,
     });
-
-    await interaction.editReply("🎵 ئێستا دەنگی لینکەکە دەستی پێکرد!");
-  } catch (e) {
-    console.error(e);
-    await interaction.editReply("❌ کێشە ڕوویدا لە وەرگرتنی دەنگەکە.");
   }
 });
+
+distube.on("playSong", (queue, song) =>
+  queue.textChannel.send(`🎵 ئێستا ئەم گۆرانییە لێدەدرێت: ${song.name}`)
+);
 
 client.login(process.env.TOKEN);
