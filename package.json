@@ -1,14 +1,16 @@
 {
   "name": "youtube-discord-bot",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@discordjs/voice": "^0.16.1",
     "discord.js": "^14.14.1",
-    "dotenv": "^16.4.5",
-    "yt-dlp-exec": "latest"
+    "@discordjs/voice": "^0.16.1",
+    "distube": "^4.14.0",
+    "@distube/spotify": "^2.0.1",
+    "@distube/yt-dlp": "^1.2.0",
+    "dotenv": "^16.4.5"
   }
 }
