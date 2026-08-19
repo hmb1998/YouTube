@@ -72,23 +72,64 @@ function isYouTubeUrl(input) {
 }
 
 async function getAudioStream(videoId) {
-  const info = await youtube.getBasicInfo(videoId);
-  const status = info.playability_status?.status;
+  // YouTube increasingly serves some WEB requests through SABR, where
+  // formats may not contain a normal URL/cipher. Try clients that still
+  // expose regular streaming formats first, and prefer an existing URL.
+  const clients = ["TV", "IOS", "ANDROID", "WEB"];
+  let lastError = null;
+  let selectedInfo = null;
+  let selectedFormat = null;
+  let streamUrl = null;
 
-  if (status && status !== "OK") {
-    throw new Error(`YouTube playability status: ${status}`);
+  for (const clientType of clients) {
+    try {
+      const info = await youtube.getBasicInfo(videoId, { client: clientType });
+      const status = info.playability_status?.status;
+
+      if (status && status !== "OK") {
+        lastError = new Error(`YouTube playability status: ${status}`);
+        continue;
+      }
+
+      const format = info.chooseFormat({ type: "audio", quality: "best" });
+      if (!format) continue;
+
+      // Some YouTube clients return a ready-to-use URL. Do not call
+      // decipher() on those formats; doing so can trigger
+      // "No valid URL to decipher" when the format has no cipher.
+      if (typeof format.url === "string" && format.url.startsWith("http")) {
+        streamUrl = format.url;
+      } else {
+        try {
+          const deciphered = await format.decipher(youtube.session.player);
+          if (typeof deciphered === "string" && deciphered.startsWith("http")) {
+            streamUrl = deciphered;
+          }
+        } catch (error) {
+          lastError = error;
+          continue;
+        }
+      }
+
+      if (streamUrl) {
+        selectedInfo = info;
+        selectedFormat = format;
+        console.log(`✅ YouTube audio format obtained via ${clientType}`);
+        break;
+      }
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  const format = info.chooseFormat({ type: "audio", quality: "best" });
-  if (!format) throw new Error("No playable YouTube audio format found.");
-
-  const streamUrl = format.decipher(youtube.session.player);
-  if (!streamUrl) throw new Error("Could not create YouTube stream URL.");
+  if (!selectedInfo || !selectedFormat || !streamUrl) {
+    throw lastError || new Error("No playable YouTube audio stream found.");
+  }
 
   return {
-    title: info.basic_info?.title || "YouTube",
-    author: info.basic_info?.author || "",
-    thumbnail: info.basic_info?.thumbnail?.[0]?.url || null,
+    title: selectedInfo.basic_info?.title || "YouTube",
+    author: selectedInfo.basic_info?.author || "",
+    thumbnail: selectedInfo.basic_info?.thumbnail?.[0]?.url || null,
     streamUrl
   };
 }
