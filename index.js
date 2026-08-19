@@ -33,10 +33,19 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-// دابینکردنی کووکی بۆ play-dl ئەگەر هەبێت
+// چاککردنی دانانی کووکی بۆ play-dl
 if (YOUTUBE_COOKIE) {
-  play.setCookies(YOUTUBE_COOKIE);
-  console.log("🍪 YouTube Cookie loaded successfully!");
+  try {
+    if (typeof play.cookie?.set === "function") {
+      play.cookie.set(YOUTUBE_COOKIE);
+      console.log("🍪 YouTube Cookie loaded successfully via cookie.set!");
+    } else if (typeof play.setCookies === "function") {
+      play.setCookies(YOUTUBE_COOKIE);
+      console.log("🍪 YouTube Cookie loaded successfully via setCookies!");
+    }
+  } catch (err) {
+    console.error("⚠️ Failed to set YouTube cookie:", err);
+  }
 }
 
 const client = new Client({
@@ -255,9 +264,9 @@ client.on("interactionCreate", async interaction => {
     let message = "❌ نەتوانرا گۆرانییەکە پەخش بکرێت.";
     if (error.message === "BOT_NO_VIEW_CHANNEL") message = "❌ بۆتەکە Permission ـی View Channel نییە.";
     else if (error.message === "BOT_NO_CONNECT") message = "❌ بۆتەکە Permission ـی Connect نییە لە Voice Channel ـەکە.";
-    else if (error.message === "BOT_NO_SPEAK") message = "❌ بۆտەکە Permission ـی Speak نییە لە Voice Channel ـەکە.";
+    else if (error.message === "BOT_NO_SPEAK") message = "❌ بۆتەکە Permission ـی Speak نییە لە Voice Channel ـەکە.";
     else if (error.message === "BOT_IN_OTHER_VOICE") message = "❌ بۆتەکە لە Voice Channel ـێکی ترە.";
-    else message = "❌ کێشەیەک ڕوویدا لە هێنانی دەنگی یوتیوب (لەبەر سنوورداربوونی IP).";
+    else message = "❌ کێشەیەک ڕوویدا لە هێنانی دەنگی یوتیوب.";
 
     await interaction.editReply({ content: message });
   }
