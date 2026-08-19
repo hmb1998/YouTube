@@ -1,33 +1,32 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require("discord.js");
+const { Client, GatewayIntentBits } = require("discord.js");
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require("@discordjs/voice");
 const play = require("play-dl");
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
-
-client.once("ready", async () => {
-  const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-  const command = new SlashCommandBuilder()
-    .setName("play")
-    .setDescription("Play music from YouTube")
-    .addStringOption(opt => opt.setName("song").setDescription("YouTube URL").setRequired(true));
-
-  for (const guild of client.guilds.cache.values()) {
-    await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [command.toJSON()] });
-  }
-  console.log("✅ Bot is ready!");
+const client = new Client({ 
+  intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ] 
 });
 
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== "play") return;
-  
-  const channel = interaction.member?.voice?.channel;
-  if (!channel) return interaction.reply({ content: "❌ تکایە سەرەتا بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
+client.once("ready", () => {
+  console.log("✅ Bot is ready and running!");
+});
 
-  const url = interaction.options.getString("song");
-  if (!url) return interaction.reply({ content: "❌ تکایە لینک بنووسە.", ephemeral: true });
+client.on("messageCreate", async (message) => {
+  if (message.author.bot || !message.content.startsWith("!play")) return;
 
-  await interaction.deferReply();
+  const channel = message.member?.voice?.channel;
+  if (!channel) return message.reply("❌ تکایە سەرەتا بچۆ ناو ڤۆیس چەنڵ.");
+
+  const args = message.content.split(" ");
+  const url = args[1];
+  if (!url) return message.reply("❌ تکایە لینکی یوتیوب دوای !play بنووسە.");
+
+  const replyMsg = await message.reply("🎵 خەریکە گۆرانییەکە دەنێردرێت...");
 
   try {
     const stream = await play.stream(url);
@@ -48,10 +47,10 @@ client.on("interactionCreate", async interaction => {
       try { connection.destroy(); } catch {}
     });
 
-    await interaction.editReply("🎵 گۆرانییەکە دەستی پێکرد!");
+    await replyMsg.edit("🎵 ئێستا گۆرانییەکە دەستی پێکرد!");
   } catch (err) {
     console.error("LOG ERROR:", err);
-    await interaction.editReply(`❌ هەڵەیەک ڕوویدا: ${err.message || "نەتوانرا گۆرانییەکە لێبدرێت"}`);
+    await replyMsg.edit(`❌ هەڵەیەک ڕوویدا: ${err.message || "نەتوانرا لێبدرێت"}`);
   }
 });
 
