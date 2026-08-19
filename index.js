@@ -26,10 +26,17 @@ const { spawn } = require("child_process");
 const play = require("play-dl");
 
 const TOKEN = process.env.TOKEN;
+const YOUTUBE_COOKIE = process.env.YOUTUBE_COOKIE;
 
 if (!TOKEN) {
   console.error("❌ TOKEN is missing in Railway Variables.");
   process.exit(1);
+}
+
+// دابینکردنی کووکی بۆ play-dl ئەگەر هەبێت
+if (YOUTUBE_COOKIE) {
+  play.setCookies(YOUTUBE_COOKIE);
+  console.log("🍪 YouTube Cookie loaded successfully!");
 }
 
 const client = new Client({
@@ -96,7 +103,6 @@ async function playYouTube(interaction, voiceChannel, link) {
 
   stopGuild(guildId);
 
-  // هێنانی ستریمی دەنگ بە play-dl
   const streamData = await play.stream(link);
   const info = await play.video_basic_info(link);
   const videoDetails = info.video_details;
@@ -249,9 +255,9 @@ client.on("interactionCreate", async interaction => {
     let message = "❌ نەتوانرا گۆرانییەکە پەخش بکرێت.";
     if (error.message === "BOT_NO_VIEW_CHANNEL") message = "❌ بۆتەکە Permission ـی View Channel نییە.";
     else if (error.message === "BOT_NO_CONNECT") message = "❌ بۆتەکە Permission ـی Connect نییە لە Voice Channel ـەکە.";
-    else if (error.message === "BOT_NO_SPEAK") message = "❌ بۆتەکە Permission ـی Speak نییە لە Voice Channel ـەکە.";
+    else if (error.message === "BOT_NO_SPEAK") message = "❌ بۆտەکە Permission ـی Speak نییە لە Voice Channel ـەکە.";
     else if (error.message === "BOT_IN_OTHER_VOICE") message = "❌ بۆتەکە لە Voice Channel ـێکی ترە.";
-    else message = "❌ کێشەیەک ڕوویدا لە هێنانی دەنگی یوتیوب.";
+    else message = "❌ کێشەیەک ڕوویدا لە هێنانی دەنگی یوتیوب (لەبەر سنوورداربوونی IP).";
 
     await interaction.editReply({ content: message });
   }
