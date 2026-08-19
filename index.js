@@ -44,17 +44,10 @@ client.on("messageCreate", async (message) => {
       selfMute: false
     });
 
-    // بەکارهێنانی سێتینگێکی تایبەت بۆ تێپەڕاندنی قەدەغەکردنی یوتیوب
-    let stream;
-    try {
-      stream = await play.stream(url, { discordPlayerCompatibility: true });
-    } catch {
-      // ئەگەر سەرەتا نەبوو، بە ڕێگەی تش ئای پی تاقی دەکاتەوە
-      const info = await play.video_info(url);
-      stream = await play.stream_from_info(info, { discordPlayerCompatibility: true });
-    }
+    // گەڕان بەدوای ڤیدیۆکە و هێنانی بە شێوازێکی پارێزراو
+    let streamData = await play.stream(url);
 
-    const resource = createAudioResource(stream.stream, { inputType: stream.type });
+    const resource = createAudioResource(streamData.stream, { inputType: streamData.type });
     const player = createAudioPlayer();
     
     player.play(resource);
@@ -67,7 +60,7 @@ client.on("messageCreate", async (message) => {
     await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لە ڤۆیسی (**${channel.name}**) لێدەدرێت!`);
   } catch (err) {
     console.error("LOG ERROR:", err);
-    await replyMsg.edit(`❌ یوتیوب ڕێگری لە سێرڤەرەکە کرد (Error 429). تکایە کەمێکی تر هەوڵ بدەوە.`);
+    await replyMsg.edit(`❌ یوتیوب داواکارییەکەی ڕەتکردەوە (Error 429). تکایە چەند خولەکێک چاوەڕێ بکە و پاشان لینکێکی تر تاقی بکەرەوە.`);
   }
 });
 
