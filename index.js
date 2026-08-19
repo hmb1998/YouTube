@@ -22,9 +22,11 @@ client.on("messageCreate", async (message) => {
   const channel = message.member?.voice?.channel;
   if (!channel) return message.reply("❌ تکایە سەرەتا بچۆ ناو ڤۆیس چەنڵ.");
 
-  const args = message.content.split(" ");
-  const url = args[1];
-  if (!url) return message.reply("❌ تکایە لینکی یوتیوب دوای !play بنووسە.");
+  // دۆزینەوەی یەکەم لینک لەناو پەیامەکەدا بە شێوازێکی زیرەک
+  const urlMatch = message.content.match(/https?:\/\/[^\s]+/);
+  const url = urlMatch ? urlMatch[0] : null;
+
+  if (!url) return message.reply("❌ تکایە لینکی یوتیوب بنووسە.");
 
   const replyMsg = await message.reply("🎵 خەریکە گۆرانییەکە دەنێردرێت...");
 
