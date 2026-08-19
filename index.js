@@ -23,7 +23,7 @@ const {
 } = require("@discordjs/voice");
 
 const { spawn } = require("child_process");
-const path = require("path");
+const play = require("play-dl");
 
 const TOKEN = process.env.TOKEN;
 
@@ -39,7 +39,6 @@ const client = new Client({
   ]
 });
 
-let youtube;
 const guildPlayers = new Map();
 
 function getYouTubeVideoId(input) {
@@ -71,48 +70,6 @@ function isYouTubeUrl(input) {
   }
 }
 
-async function getAudioStream(videoId) {
-  const info = await youtube.getBasicInfo(videoId);
-  const status = info.playability_status?.status;
-
-  if (status && status !== "OK") {
-    throw new Error(`YouTube playability status: ${status}`);
-  }
-
-  const formats = info.streaming_data?.formats || [];
-  const adaptiveFormats = info.streaming_data?.adaptive_formats || [];
-  const allFormats = [...formats, ...adaptiveFormats];
-
-  let streamUrl = null;
-  for (const fmt of allFormats) {
-    if (fmt.url && (fmt.mime_type?.includes("audio") || fmt.type?.includes("audio"))) {
-      streamUrl = fmt.url;
-      break;
-    }
-  }
-
-  // ئەگەر لینکی ڕاستەوخۆ نەدۆزرایەوە، با chooseFormat تاقی بکەینەوە بێ decipher
-  if (!streamUrl) {
-    const format = info.chooseFormat({ type: "audio", quality: "best" });
-    if (format && typeof format.url === "string" && format.url.startsWith("http")) {
-      streamUrl = format.url;
-    }
-  }
-
-  if (!streamUrl) {
-    throw new Error("No direct playable YouTube audio stream found.");
-  }
-
-  console.log("✅ YouTube audio stream obtained successfully");
-
-  return {
-    title: info.basic_info?.title || "YouTube",
-    author: info.basic_info?.author || "",
-    thumbnail: info.basic_info?.thumbnail?.[0]?.url || null,
-    streamUrl
-  };
-}
-
 function stopGuild(guildId) {
   const current = guildPlayers.get(guildId);
   if (!current) return;
@@ -123,21 +80,15 @@ function stopGuild(guildId) {
   guildPlayers.delete(guildId);
 }
 
-async function playYouTube(interaction, voiceChannel, link, videoId) {
+async function playYouTube(interaction, voiceChannel, link) {
   const guildId = interaction.guild.id;
 
   const me = interaction.guild.members.me;
   const perms = voiceChannel.permissionsFor(me);
 
-  if (!perms?.has(PermissionsBitField.Flags.ViewChannel)) {
-    throw new Error("BOT_NO_VIEW_CHANNEL");
-  }
-  if (!perms?.has(PermissionsBitField.Flags.Connect)) {
-    throw new Error("BOT_NO_CONNECT");
-  }
-  if (!perms?.has(PermissionsBitField.Flags.Speak)) {
-    throw new Error("BOT_NO_SPEAK");
-  }
+  if (!perms?.has(PermissionsBitField.Flags.ViewChannel)) throw new Error("BOT_NO_VIEW_CHANNEL");
+  if (!perms?.has(PermissionsBitField.Flags.Connect)) throw new Error("BOT_NO_CONNECT");
+  if (!perms?.has(PermissionsBitField.Flags.Speak)) throw new Error("BOT_NO_SPEAK");
 
   if (me?.voice?.channelId && me.voice.channelId !== voiceChannel.id) {
     throw new Error("BOT_IN_OTHER_VOICE");
@@ -145,7 +96,10 @@ async function playYouTube(interaction, voiceChannel, link, videoId) {
 
   stopGuild(guildId);
 
-  const data = await getAudioStream(videoId);
+  // هێنانی ستریمی دەنگ بە play-dl
+  const streamData = await play.stream(link);
+  const info = await play.video_basic_info(link);
+  const videoDetails = info.video_details;
 
   const connection = joinVoiceChannel({
     channelId: voiceChannel.id,
@@ -164,16 +118,15 @@ async function playYouTube(interaction, voiceChannel, link, videoId) {
   const ffmpeg = spawn(ffmpegPath, [
     "-hide_banner",
     "-loglevel", "error",
-    "-reconnect", "1",
-    "-reconnect_streamed", "1",
-    "-reconnect_delay_max", "5",
-    "-i", data.streamUrl,
+    "-i", "pipe:0",
     "-vn",
     "-f", "s16le",
     "-ar", "48000",
     "-ac", "2",
     "pipe:1"
-  ], { stdio: ["ignore", "pipe", "pipe"] });
+  ], { stdio: ["pipe", "pipe", "pipe"] });
+
+  streamData.stream.pipe(ffmpeg.stdin);
 
   const resource = createAudioResource(ffmpeg.stdout, {
     inputType: StreamType.Raw,
@@ -215,7 +168,10 @@ async function playYouTube(interaction, voiceChannel, link, videoId) {
     }
   });
 
-  return data;
+  return {
+    title: videoDetails.title || "YouTube",
+    thumbnail: videoDetails.thumbnails?.[0]?.url || null
+  };
 }
 
 const youtubeCommand = new SlashCommandBuilder()
@@ -230,15 +186,6 @@ const youtubeCommand = new SlashCommandBuilder()
 
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-
-  try {
-    const mod = await import("youtubei.js");
-    youtube = await mod.Innertube.create({ generate_session_locally: true });
-    console.log("✅ YouTube engine loaded");
-  } catch (error) {
-    console.error("❌ YouTube engine loading error:", error);
-    process.exit(1);
-  }
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
   const command = youtubeCommand.toJSON();
@@ -286,7 +233,7 @@ client.on("interactionCreate", async interaction => {
   await interaction.deferReply();
 
   try {
-    const data = await playYouTube(interaction, voiceChannel, link, videoId);
+    const data = await playYouTube(interaction, voiceChannel, link);
 
     const embed = new EmbedBuilder()
       .setTitle("🎵 ئێستا دەخوێنرێت")
@@ -304,7 +251,7 @@ client.on("interactionCreate", async interaction => {
     else if (error.message === "BOT_NO_CONNECT") message = "❌ بۆتەکە Permission ـی Connect نییە لە Voice Channel ـەکە.";
     else if (error.message === "BOT_NO_SPEAK") message = "❌ بۆتەکە Permission ـی Speak نییە لە Voice Channel ـەکە.";
     else if (error.message === "BOT_IN_OTHER_VOICE") message = "❌ بۆتەکە لە Voice Channel ـێکی ترە.";
-    else if (/LOGIN_REQUIRED|AGE_RESTRICTED|UNPLAYABLE/i.test(error.message)) message = "❌ ئەم ڤیدیۆیە لەلایەن YouTube ـەوە بۆ playback بەردەست نییە. ڤیدیۆیەکی تری تاقی بکەرەوە.";
+    else message = "❌ کێشەیەک ڕوویدا لە هێنانی دەنگی یوتیوب.";
 
     await interaction.editReply({ content: message });
   }
