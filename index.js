@@ -5,22 +5,34 @@ const play = require("play-dl");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
 
+client.once("ready", async () => {
+  console.log("✅ Bot is ready!");
+  const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+  const command = new SlashCommandBuilder()
+    .setName("play")
+    .setDescription("Play a YouTube link directly")
+    .addStringOption(opt => opt.setName("link").setDescription("Direct YouTube URL").setRequired(true));
+
+  for (const guild of client.guilds.cache.values()) {
+    await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [command.toJSON()] });
+  }
+});
+
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand() || interaction.commandName !== "play") return;
 
   const channel = interaction.member?.voice?.channel;
-  if (!channel) return interaction.reply({ content: "تکایە بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
+  if (!channel) return interaction.reply({ content: "❌ سەرەتا بچۆ ناو ڤۆیس چەنڵ.", ephemeral: true });
+
+  const url = interaction.options.getString("link");
+  if (!url.includes("http")) {
+    return interaction.reply({ content: "❌ تکایە لینکی ڕاستەوخۆی یوتیوب دابنە (ناوی گۆرانی مەنوسە).", ephemeral: true });
+  }
 
   await interaction.deferReply();
 
   try {
-    const query = interaction.options.getString("link");
-    // بەکارهێنانی search بۆ دۆزینەوەی گۆرانییەکە بەبێ کێشەی client_id
-    const res = await play.search(query, { limit: 1 });
-    if (!res.length) return interaction.editReply("گۆرانییەکە نەدۆزرایەوە!");
-
-    const song = res[0];
-    const stream = await play.stream(song.url);
+    const stream = await play.stream(url);
 
     const connection = joinVoiceChannel({ channelId: channel.id, guildId: channel.guild.id, adapterCreator: channel.guild.voiceAdapterCreator });
     const player = createAudioPlayer();
@@ -32,10 +44,10 @@ client.on("interactionCreate", async interaction => {
       connection.destroy();
     });
 
-    await interaction.editReply(`🎵 ئێستا لێدەدرێت: **${song.title}**`);
+    await interaction.editReply(`🎵 ئێستا لێدەدرێت لە لینکەوە!`);
   } catch (err) {
     console.error(err);
-    await interaction.editReply("❌ کێشەیەک ڕوویدا لە لێدانی گۆرانییەکە.");
+    await interaction.editReply("❌ کێشەیەک ڕوویدا لە لێدانی لینکەکە.");
   }
 });
 
