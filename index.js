@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const play = require('play-dl');
+const ytdl = require('@distube/ytdl-core');
 const { joinVoiceChannel, createAudioResource, createAudioPlayer } = require('@discordjs/voice');
 const http = require('http');
 
@@ -39,21 +39,18 @@ client.on('messageCreate', async (message) => {
         const player = createAudioPlayer();
         connection.subscribe(player);
 
-        // پشکنین و هێنانی زانیاری گۆرانی بە شێوازێکی پارێزراو
-        let streamData = await play.stream(url, { discordPlayerCompatibility: true });
-        const resource = createAudioResource(streamData.stream, {
-            inputType: streamData.type
-        });
+        const stream = ytdl(url, { filter: 'audioonly', highWaterMark: 1 << 25 });
+        const resource = createAudioResource(stream);
         
         player.play(resource);
         await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لێدەدرێت!`);
     } catch (error) {
         console.error("LOG ERROR:", error);
-        await replyMsg.edit('❌ کێشەیەک ڕوویدا، یوتیوب داوای پشکنینی بۆت دەکات یان لینکەکە هەڵەیە.');
+        await replyMsg.edit('❌ کێشەیەک ڕوویدا، دڵنیا ببەوە لەوەی لینکەکە ڕاستە.');
     }
 });
 
-// سێرڤەری وێب بۆ پۆرت 8080 تا Fly.io هەمیشە بە زیندویی بهێڵێتەوە
+// سێرڤەری وێب بۆ پۆرت 8080 تا Fly.io ڕیستارتی نەکاتەوە
 const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
