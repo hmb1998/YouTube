@@ -73,48 +73,42 @@ function isYouTubeUrl(input) {
 }
 
 async function getAudioStream(videoId) {
-  const clients = ["TV", "IOS", "ANDROID", "WEB"];
   let lastError = null;
   let selectedInfo = null;
   let selectedFormat = null;
   let streamUrl = null;
 
-  for (const clientType of clients) {
-    try {
-      const info = await youtube.getBasicInfo(videoId, { client: clientType });
-      const status = info.playability_status?.status;
+  try {
+    const info = await youtube.getBasicInfo(videoId);
+    const status = info.playability_status?.status;
 
-      if (status && status !== "OK") {
-        lastError = new Error(`YouTube playability status: ${status}`);
-        continue;
-      }
-
+    if (!status || status === "OK") {
       const format = info.chooseFormat({ type: "audio", quality: "best" });
-      if (!format) continue;
-
-      if (typeof format.url === "string" && format.url.startsWith("http")) {
-        streamUrl = format.url;
-      } else {
-        try {
-          const deciphered = await format.decipher(youtube.session.player);
-          if (typeof deciphered === "string" && deciphered.startsWith("http")) {
-            streamUrl = deciphered;
+      if (format) {
+        if (typeof format.url === "string" && format.url.startsWith("http")) {
+          streamUrl = format.url;
+        } else {
+          try {
+            const deciphered = await format.decipher(youtube.session.player);
+            if (typeof deciphered === "string" && deciphered.startsWith("http")) {
+              streamUrl = deciphered;
+            }
+          } catch (error) {
+            lastError = error;
           }
-        } catch (error) {
-          lastError = error;
-          continue;
+        }
+
+        if (streamUrl) {
+          selectedInfo = info;
+          selectedFormat = format;
+          console.log(`✅ YouTube audio format obtained successfully`);
         }
       }
-
-      if (streamUrl) {
-        selectedInfo = info;
-        selectedFormat = format;
-        console.log(`✅ YouTube audio format obtained via ${clientType}`);
-        break;
-      }
-    } catch (error) {
-      lastError = error;
+    } else {
+      lastError = new Error(`YouTube playability status: ${status}`);
     }
+  } catch (error) {
+    lastError = error;
   }
 
   if (!selectedInfo || !selectedFormat || !streamUrl) {
