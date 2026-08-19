@@ -1,7 +1,7 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits } = require("discord.js");
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require("@discordjs/voice");
-const play = require("play-dl");
+const ytdl = require("@distube/ytdl-core");
 
 const client = new Client({ 
   intents: [
@@ -44,10 +44,8 @@ client.on("messageCreate", async (message) => {
       selfMute: false
     });
 
-    // گەڕان بەدوای ڤیدیۆکە و هێنانی بە شێوازێکی پارێزراو
-    let streamData = await play.stream(url);
-
-    const resource = createAudioResource(streamData.stream, { inputType: streamData.type });
+    const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 });
+    const resource = createAudioResource(stream);
     const player = createAudioPlayer();
     
     player.play(resource);
@@ -60,7 +58,7 @@ client.on("messageCreate", async (message) => {
     await replyMsg.edit(`🎵 ئێستا گۆرانییەکە لە ڤۆیسی (**${channel.name}**) لێدەدرێت!`);
   } catch (err) {
     console.error("LOG ERROR:", err);
-    await replyMsg.edit(`❌ یوتیوب داواکارییەکەی ڕەتکردەوە (Error 429). تکایە چەند خولەکێک چاوەڕێ بکە و پاشان لینکێکی تر تاقی بکەرەوە.`);
+    await replyMsg.edit(`❌ هەڵەیەک ڕوودا لە لێدانی گۆرانییەکە. دڵنیا ببەوە لە ڕاستی لینکەکە.`);
   }
 });
 
