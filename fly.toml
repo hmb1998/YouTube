@@ -10,12 +10,3 @@ primary_region = "iad"
   auto_stop_machines = false
   auto_start_machines = true
   min_machines_running = 1
-
-# ئەم بەشە زۆر گرنگە بۆ ئەوەی Fly.io نەبێتە هۆی کوژاندنەوەی بۆتەکە
-[[http_service.checks]]
-  grace_period = "30s"
-  interval = "30s"
-  method = "GET"
-  path = "/"
-  port = 8080
-  timeout = "5s"
